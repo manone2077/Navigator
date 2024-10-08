@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: Navigator
+  datasource:
+    url: jdbc:h2:file:./navdb
+    hikari:
+      driver-class-name: org.h2.Driver
+      username: sa
+      password: password
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    defer-datasource-initialization: true
+    generate-ddl: true
+server:
+  port: 8000
