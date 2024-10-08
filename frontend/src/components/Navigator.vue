@@ -1,13 +1,21 @@
 <script setup>
 
-import {onMounted, ref} from "vue";
+import {onMounted, ref, watch} from "vue";
 import Site from "@/components/Site.vue";
 import {ElMessage} from "element-plus";
 import {Plus} from "@element-plus/icons-vue";
 import http from '@/service/http.js'
+import {VueDraggable} from "vue-draggable-plus";
 
 const siteInfo = ref([])
 const deleteConfirm = ref(false)
+
+watch(siteInfo, async (newSiteInfo, oldSiteInfo) => {
+  if (oldSiteInfo.length === newSiteInfo.length ) {
+    console.log('拖拽位置')
+
+  }
+})
 
 const init = () => {
   http.get("/all")
@@ -99,7 +107,7 @@ const speedtest = () => {
           speedBtn.value = true
           init()
         }).finally(result => {
-          speedBtn.value = false
+      speedBtn.value = false
       ElMessage.success('测速完成')
     })
   } else {
@@ -111,7 +119,7 @@ const speedtest = () => {
 
 <template>
   <div id="header">
-    <h1>站点导航</h1>
+    <h1>皮特 站点导航</h1>
     <el-button @click="checkin" type="primary">一键签到</el-button>
     <el-button @click="speedtest" type="primary" :loading="speedBtn">速度测试</el-button>
     <el-button @click="siteInfo.length<1?ElMessage.warning('没有站点可删除。'):deleteConfirm=true" type="primary">
@@ -119,7 +127,9 @@ const speedtest = () => {
     </el-button>
   </div>
   <div id="main">
-    <Site v-for="site in siteInfo" :key="site.id" v-bind="site" class="site-item" @update-site="updateInfo"/>
+    <VueDraggable ref="el" v-model="siteInfo" id="drag" :animation="150">
+      <Site v-for="site in siteInfo" :key="site.id" v-bind="site" class="site-item" @update-site="updateInfo"/>
+    </VueDraggable>
   </div>
 
   <div id="add-site">
@@ -187,7 +197,7 @@ const speedtest = () => {
   padding: 0 20px;
 }
 
-#main {
+#main > #drag {
   display: flex;
   justify-content: space-around;
   flex-wrap: wrap;

@@ -3,7 +3,6 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     vue(),
@@ -24,6 +23,7 @@ export default defineConfig({
       }
     }
   },
+  // 替换为后端所在目录，方便docker 打包部署；也可将build 直接删掉
   build:{
     outDir: 'C:/proj/java/Navigator/docker/dist',
     assetsDir: './assets',
