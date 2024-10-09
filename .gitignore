@@ -31,3 +31,5 @@ build/
 
 ### VS Code ###
 .vscode/
+/navdb.mv.db
+/navdb.trace.db
