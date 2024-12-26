@@ -22,7 +22,7 @@ import java.util.Optional;
 public class HomeController {
     @Resource
     private SiteInfoDao siteInfoDao;
-    @Autowired
+    @Resource
     private ScheduleTask scheduleTask;
 
     @RequestMapping("/all")

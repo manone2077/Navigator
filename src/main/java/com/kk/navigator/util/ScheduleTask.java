@@ -16,7 +16,7 @@ public class ScheduleTask {
     private String ua="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36";
     private String accept="text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7";
     private String accept_encoding="gzip, deflate, br, zstd";
-    private int timtout=10000;
+    private int timetout=10000;
 
     private String authorization="xxx";
     private String cookie="name=admin";
@@ -43,7 +43,7 @@ public class ScheduleTask {
                     .header("accept-encoding", accept_encoding)
                     .header("Host", getHost())
                     .header("referer", getFullPath())
-                    .setConnectionTimeout(timtout)
+                    .setConnectionTimeout(timetout)
                     .execute();
             log.info("status code:{}", resp.getStatus());
 
