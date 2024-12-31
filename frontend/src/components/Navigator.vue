@@ -11,7 +11,7 @@ const siteInfo = ref([])
 const deleteConfirm = ref(false)
 
 watch(siteInfo, async (newSiteInfo, oldSiteInfo) => {
-  if (oldSiteInfo.length === newSiteInfo.length ) {
+  if (oldSiteInfo.length === newSiteInfo.length) {
     console.log('拖拽位置')
 
   }
@@ -83,12 +83,13 @@ const handleAdd = () => {
   }
   http.post("/add", site.value)
       .then(res => {
-        console.log('添加成功')
-        init()
-        dialogVisible.value = false
-
+        if (res.data.code === 200) {
+          init()
+          dialogVisible.value = false
+          ElMessage.success(res.data.msg)
+        }
       }).catch(err => {
-    console.log('添加失败')
+    ElMessage.error("站点添加失败，请重试")
   })
 }
 
