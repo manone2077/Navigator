@@ -1,3 +1,7 @@
 
 image:
   path: /app/public/images/
+
+
+assets:
+  path: /app/public/assets/
