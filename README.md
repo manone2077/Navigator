@@ -11,5 +11,5 @@ Navigator for website management
 5. 支持代理访问
 
 ## 效果如下
-图中的图像获取失败，不是系统问题，是本身对应的站点没有favicon 文件导致，可以忽略
+图中的图像获取失败，不是系统问题，是本身对应的站点没有favicon 文件导致，可以忽略或点击上传一张即可
 ![nav.png](images/nav.png)
