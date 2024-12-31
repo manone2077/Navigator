@@ -9,4 +9,4 @@ Navigator for website management
 3. 拖拽排序
 4. 直接添加PT 站点
 5. 备份（导入、导出？）
-6. 修改头像
+6. 修改头像[done]
