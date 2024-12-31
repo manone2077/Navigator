@@ -145,7 +145,7 @@ public class HomeController {
         return R.success("测速完成");
     }
 
-    @Scheduled(initialDelay = 5 * 1000, fixedRate = 1000 * 60 * 10)
+    @Scheduled(initialDelay = 10 * 1000, fixedRate = 1000 * 60 * 10)
     public void scheduleTask() {
         Iterable<SiteInfo> data = siteInfoDao.findAll();
         if (data.iterator().hasNext()) {
