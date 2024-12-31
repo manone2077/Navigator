@@ -1,2 +1,2 @@
 #!/bin/sh
-nginx  &&  java -jar /myapp/*.jar
+nginx  &&  java -jar /app/*.jar
