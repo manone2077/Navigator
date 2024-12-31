@@ -36,7 +36,9 @@ jobs:
           if [ "${{ github.ref_type }}" == "tag" ]; then
             echo "TAG=${{ github.ref_name }}" >> $GITHUB_ENV
           else
-            echo "TAG=latest" >> $GITHUB_ENV
+            # 获取最近的标签
+            LATEST_TAG=$(git describe --tags --abbrev=0)
+            echo "TAG=${LATEST_TAG:-latest}" >> $GITHUB_ENV
           fi
 
       - name: Build and push Docker image
@@ -46,4 +48,4 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/navigator:latest
-            ${{ secrets.DOCKER_USERNAME }}/navigator:${{ github.ref_name }}
+            ${{ secrets.DOCKER_USERNAME }}/navigator:${{ env.TAG }}
