@@ -17,6 +17,6 @@ docker run -d -p 9000:80 --name MyNavigator greatpower/navigator:latest
 ```
 
 ## 效果如下
-访问  http://yourip:9000/ 
+访问  http://yourip:9000/   
 图中的图像获取失败，不是系统问题，是本身对应的站点没有favicon 文件导致，可以忽略或点击上传一张即可
 ![nav.png](images/nav.png)
