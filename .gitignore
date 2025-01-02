@@ -33,3 +33,6 @@ build/
 .vscode/
 /navdb.mv.db
 /navdb.trace.db
+/temp/
+/data/db/navdb.mv.db
+/data/db/navdb.trace.db
