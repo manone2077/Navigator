@@ -16,7 +16,9 @@ public class SystemUserAgent {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Integer id;
-    private String content;
+    private String userAgent;
+    // 标识 ua 是否启动，0 启用，1 禁用
+    private Integer status;
 
 
     @CreationTimestamp
