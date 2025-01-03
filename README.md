@@ -1,4 +1,7 @@
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/manone2077/Navigator/.github%2Fworkflows%2Fdocker-image.yml)
+![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/manone2077/Navigator)
+![GitHub Issues or Pull Requests](https://img.shields.io/github/issues-pr/manone2077/Navigator)
+![GitHub Tag](https://img.shields.io/github/v/tag/manone2077/Navigator)
 
 # 皮特导航
 
