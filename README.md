@@ -1,3 +1,9 @@
+![Static Badge](https://img.shields.io/badge/%E7%9A%AE%E7%89%B9%E5%AF%BC%E8%88%AA-%E7%AB%99%E7%82%B9%E7%AE%A1%E7%90%86%E7%A5%9E%E5%99%A8-green)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/manone2077/Navigator/.github%2Fworkflows%2Fdocker-image.yml)
+![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/manone2077/Navigator)
+![GitHub Issues or Pull Requests](https://img.shields.io/github/issues-pr/manone2077/Navigator)
+![GitHub Tag](https://img.shields.io/github/v/tag/manone2077/Navigator)
+
 # 皮特导航
 
 Navigator for website management
