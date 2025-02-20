@@ -12,6 +12,6 @@ spring:
     defer-datasource-initialization: true
     generate-ddl: true
   profiles:
-    active: prod
+    active: dev
 server:
   port: 8000
