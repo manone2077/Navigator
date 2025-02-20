@@ -3,6 +3,9 @@ package com.kk.navigator.util;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpConfig;
 import cn.hutool.http.HttpResponse;
+import com.kk.navigator.entity.Setting; // 修改引用的类名
+import com.kk.navigator.repository.SettingRepository;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -12,68 +15,61 @@ import java.net.*;
 @Component
 @Slf4j
 public class ScheduleTask {
-    private String checkinUrl="https://www.baidu.com/?q=java+URL&PC=U316&FORM=CHROMN";
-    private String ua="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36";
-    private String accept="text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7";
-    private String accept_encoding="gzip, deflate, br, zstd";
-    private int timetout=10000;
+    @Resource
+    private SettingRepository settingRepository;
 
-    private String authorization="xxx";
-    private String cookie="name=admin";
-
-    private String proxyHost="10.19.9.30";
-    private int proxyPort=7890;
-    private Proxy.Type proxyType=Proxy.Type.HTTP;
-
-
-    @Scheduled(initialDelay = 5000,fixedRate = 5000)
+    @Scheduled(initialDelay = 5000, fixedRate = 5000)
     private void checkin() {
         log.info("checkin");
-        HttpConfig config = new HttpConfig();
-        Proxy proxy = new Proxy(proxyType, new InetSocketAddress(proxyHost, proxyPort));
-        config.setProxy(proxy);
+        Setting setting = settingRepository.findFirstByOrderByLastModifiedDateDesc(); // 修改引用的类名
+        if (setting == null) {
+            log.error("No configuration found in the database.");
+            return;
+        }
+
+        HttpConfig httpConfig = new HttpConfig();
+        Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(setting.getProxyHost(), setting.getProxyPort()));
+        httpConfig.setProxy(proxy);
 
         try {
-            HttpResponse resp = HttpRequest.get(checkinUrl)
-                    .setConfig(config)
-                    .header("User-Agent", ua)
-                    .header("authorization", authorization)
-                    .header("cookie", cookie)
-                    .header("accept", accept)
-                    .header("accept-encoding", accept_encoding)
-                    .header("Host", getHost())
-                    .header("referer", getFullPath())
-                    .setConnectionTimeout(timetout)
+            HttpResponse resp = HttpRequest.get(setting.getCheckinUrl())
+                    .setConfig(httpConfig)
+                    .header("User-Agent", setting.getUa())
+                    .header("authorization", setting.getAuthToken())
+                    .header("cookie", setting.getCookie())
+                    .header("accept", setting.getAccept())
+                    .header("accept-encoding", setting.getAcceptEncoding())
+                    .header("Host", getHost(setting.getCheckinUrl()))
+                    .header("referer", getFullPath(setting.getCheckinUrl()))
+                    .setConnectionTimeout(setting.getTimeout())
                     .execute();
             log.info("status code:{}", resp.getStatus());
 
-        }catch (Exception exception){
+        } catch (Exception exception) {
             log.error(exception.getMessage());
         }
-
-
     }
 
-    private String getHost() throws MalformedURLException {
-        URL url = new URL(checkinUrl);
+    private String getHost(String urlStr) throws MalformedURLException {
+        URL url = new URL(urlStr);
         return url.getHost();
     }
 
-    private String getFullPath() throws MalformedURLException {
-        URL url=new URL(checkinUrl);
-        String protocol=url.getProtocol();
-        String host=url.getHost();
-        String path=url.getPath();
+    private String getFullPath(String urlStr) throws MalformedURLException {
+        URL url = new URL(urlStr);
+        String protocol = url.getProtocol();
+        String host = url.getHost();
+        String path = url.getPath();
         int port = url.getPort();
 
         String fullPath;
         if (port == -1) {
-            fullPath=protocol+"://"+host+path;
-        }else{
-            fullPath=protocol+"://"+host+":"+port+path;
+            fullPath = protocol + "://" + host + path;
+        } else {
+            fullPath = protocol + "://" + host + ":" + port + path;
         }
 
-        log.info("getFullPath:{}",fullPath);
+        log.info("getFullPath:{}", fullPath);
         return fullPath;
     }
 }
