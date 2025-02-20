@@ -24,7 +24,10 @@ docker run -d -p 9000:80 --name MyNavigator -v /config:/app/data greatpower/navi
 
 ## 开发相关
 1. 本项目使用git 进行版本管理
-2. 主要分为`master、dev、release` 三个分支，其中[dev](https://github.com/manone2077/Navigator/tree/dev) 用作开发，[release](https://github.com/manone2077/Navigator/tree/release) 用作版本发布，[master](https://github.com/manone2077/Navigator) 用作部署(只用来合并`dev` 分支代码)
+2. 主要分为`master、dev、release` 三个分支，
+   1. [dev](https://github.com/manone2077/Navigator/tree/dev) 在 dev 分支上创建功能分支进行开发。
+   2. [release](https://github.com/manone2077/Navigator/tree/release) 通过 release 分支进行最后的测试和准备发布(调整需要使用的配置文件等)。
+   3. [master](https://github.com/manone2077/Navigator) 用作部署(只用来合并`dev` 分支代码)
 
 ## 效果如下
 访问  http://yourip:9000/   
