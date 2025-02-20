@@ -3,9 +3,9 @@ name: Build and Push Docker Image on Release Branch
 on:
   push:
     branches:
-      - release
+      - release/*  # 修改为匹配所有以 release/ 开头的分支
     tags:
-      - '*'
+      - '*'  # 保留标签触发
 
 jobs:
   build-and-push:
