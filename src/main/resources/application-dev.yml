@@ -1,3 +1,6 @@
 
 image:
   path: C:\proj\java\Navigator\temp\images\
+
+assets:
+  path: C:\proj\java\Navigator\docker\dist\assets
