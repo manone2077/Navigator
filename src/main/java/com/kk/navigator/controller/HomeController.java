@@ -106,10 +106,10 @@ public class HomeController {
         }
     }
 
-    @RequestMapping("/del")
+    @RequestMapping("/delete")
     public R delSiteInfo(@RequestBody SiteInfo siteInfo) {
         siteInfoDao.delete(siteInfo);
-        return R.success("Site info deleted successfully");
+        return R.success("站点删除成功");
     }
 
     @RequestMapping("/deleteAll")
