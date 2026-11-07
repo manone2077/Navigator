@@ -1,10 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8">
     <link rel="icon" href="/favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>皮特-站点导航</title>
+    <meta name="description" content="皮特导航 - 站点导航与管理">
+    <title>皮特导航</title>
+    <script>
+      // 提前应用深色模式，避免刷新时闪白
+      (function () {
+        var t = localStorage.getItem('navigator-theme')
+        if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark')
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

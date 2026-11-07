@@ -1,171 +1,234 @@
 <script setup>
-import {EditPen} from "@element-plus/icons-vue";
-import {computed, onMounted, ref, useTemplateRef} from "vue";
-import {ElMessage} from "element-plus";
-import axios from "axios";
-import http from "@/service/http.js";
+import { computed, ref, watch } from 'vue'
+import { Delete, EditPen, Rank } from '@element-plus/icons-vue'
+import { avatarColor, faviconOf, hostOf, latencyInfo } from '@/composables/site.js'
 
-const props = defineProps(['id', 'content', 'url', 'title', 'description', 'checkinUrl', 'icon', 'status'])
-
-let baseUrl = props['url']
-const imageUrl=ref('')
-
-onMounted(()=>{
-  if(props.icon.length >0){
-    imageUrl.value=props.icon
-  }
+const props = defineProps({
+  site: { type: Object, required: true },
+  draggable: { type: Boolean, default: true },
 })
+const emit = defineEmits(['edit', 'delete'])
 
-const color = computed(() => {
-  if (props.status < 0) {
-    return 'gray'
-  } else if (props.status < 1000) {
-    return 'green'
-  } else if (props.status <= 5000) {
-    return 'orange'
-  } else if (props.status === 88888) {
-    return 'brown'
-  } else {
-    return 'red'
-  }
-})
+// 图标：自定义图标 -> 站点 favicon -> 文字头像
+const iconFailed = ref(false)
+const iconSrc = computed(() => props.site.icon || faviconOf(props.site.url))
+watch(iconSrc, () => (iconFailed.value = false))
 
-const speedTip = computed(() => {
-  if (props.status < 0) {
-    return '您好没测过速度呢'
-  } else if (props.status < 1000) {
-    return '速度非常好'
-  } else if (props.status <= 5000) {
-    return '速度有点慢哟'
-  } else if (props.status === 88888) {
-    return '超时啦啦啦啦'
-  } else if (props.status === 99999) {
-    return '网络不可达，拔网线掀桌子吧'
-  }
-})
-
-const faviconUrl = computed(() => {
-  if (baseUrl.endsWith('/')) {
-    return baseUrl + 'favicon.ico'
-
-  } else {
-    if (!baseUrl.startsWith('http')) {
-      baseUrl = 'http://' + baseUrl
-    }
-    let temp = baseUrl.split('/')
-    const schema = temp[0]
-    const domain = temp[2]
-
-    return schema + "//" + domain + '/favicon.ico'
-  }
-})
-
-const upload=useTemplateRef('upload')
-const setIconImg=()=>{
-  upload.value.click()
-}
-
-const uploadImg=()=>{
-  let file=upload.value.files[0]
-  let formData = new FormData();
-  formData.append('file', file);
-  axios({
-    url: '/api/upload',
-    method: 'POST',
-    data:formData,
-    headers:{
-      'Content-Type': 'multipart/form-data',
-    }
-  }).then(resp=>{
-    if(resp.data.code === 200){
-      imageUrl.value = '/images/'+resp.data.data;
-      console.log(imageUrl.value);
-
-      http.post('/updateImage',{id:props.id,icon:imageUrl.value}).then(res=>{
-        if(res.data.code === 200){
-          ElMessage.success(res.data.msg)
-        }
-      })
-    }
-  })
-}
-
-
-
+const latency = computed(() => latencyInfo(props.site.status))
+const host = computed(() => hostOf(props.site.url))
+const letter = computed(() => (props.site.title || host.value || '?').trim().charAt(0).toUpperCase())
 </script>
 
 <template>
-  <el-card>
-    <div id="header">
-      <h2>{{ title }}</h2>
-      <img :src="imageUrl.length>0?imageUrl:faviconUrl" alt="FAILED" @click="setIconImg"  />
-      <input id="file" ref="upload" type="file" name="file"  value="" @change="uploadImg" style="display: none">
-
-      <span style="display: none">{{ id }}{{ url }}{{ status }}</span>
-    </div>
-    <p>
-      {{ content }}
-    </p>
-    <div id="footer">
-      <span class="link">
-        <a :href="url" target="_blank">{{ url }}</a>
-      </span>
-      <span id="icon">
-        <el-tooltip
-            class="box-item"
-            effect="light"
-            :content="speedTip"
-            placement="top-start"
+  <a class="site-card" :href="site.url" target="_blank" rel="noopener noreferrer" :title="site.url">
+    <div class="card-top">
+      <div class="icon">
+        <img v-if="iconSrc && !iconFailed" :src="iconSrc" alt="" loading="lazy" @error="iconFailed = true" />
+        <span v-else class="letter" :style="{ background: avatarColor(site.title) }">{{ letter }}</span>
+      </div>
+      <div class="titles">
+        <div class="title">{{ site.title }}</div>
+        <div class="host">{{ host }}</div>
+      </div>
+      <div class="actions" @click.prevent.stop>
+        <el-tooltip content="编辑" placement="top" :show-after="400">
+          <button class="act" aria-label="编辑" @click="emit('edit', site)"><el-icon><EditPen /></el-icon></button>
+        </el-tooltip>
+        <el-popconfirm
+          :title="`确定删除「${site.title}」吗？`"
+          confirm-button-text="删除"
+          cancel-button-text="取消"
+          confirm-button-type="danger"
+          width="220"
+          @confirm="emit('delete', site)"
         >
-         <span id="status"><el-icon><Link/></el-icon></span>
-
-      </el-tooltip>
-        <span id="update"><el-icon><EditPen @click="$emit('updateSite',id)"/></el-icon></span>
-      </span>
+          <template #reference>
+            <button class="act danger" aria-label="删除"><el-icon><Delete /></el-icon></button>
+          </template>
+        </el-popconfirm>
+        <el-tooltip v-if="draggable" content="拖动排序" placement="top" :show-after="400">
+          <span class="act drag-handle" aria-label="拖动排序"><el-icon><Rank /></el-icon></span>
+        </el-tooltip>
+      </div>
     </div>
-  </el-card>
+    <p class="content" :class="{ empty: !site.content }">{{ site.content || '暂无描述' }}</p>
+    <div class="card-bottom">
+      <el-tooltip :content="latency.tip" placement="top" :show-after="200">
+        <span class="latency" :class="latency.level"><i class="dot" />{{ latency.text }}</span>
+      </el-tooltip>
+    </div>
+  </a>
 </template>
 
 <style scoped>
-#footer .link,h2 ,p{
-  width: 80%;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.el-card {
-  width: 30%;
-  min-width: 250px;
-}
-
-#header, #footer {
+.site-card {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--nav-card-bg);
+  border: 1px solid var(--nav-border);
+  color: inherit;
+  text-decoration: none;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  min-width: 0;
 }
 
-#header > img {
-  width: 40px;
-  height: 40px;
-  cursor: pointer;
+.site-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--nav-shadow-hover);
+  border-color: var(--el-color-primary-light-5);
 }
 
-#status, #update {
-  font-size: 25px;
+.card-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 
-#status {
-  margin-right: 10px;
-  color: v-bind("color");
+.icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--nav-icon-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
-#status > .el-icon {
-  font-weight: bold;
+.icon img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
 }
 
-@media screen and (max-width: 800px) {
-  .el-card {
-    width: 100%;
+.letter {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 20px;
+}
+
+.titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.host {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.site-card:hover .actions,
+.site-card:focus-within .actions {
+  opacity: 1;
+}
+
+/* 触屏设备没有 hover，始终显示操作按钮 */
+@media (hover: none) {
+  .actions {
+    opacity: 1;
   }
 }
+
+.act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.act:hover {
+  background: var(--nav-icon-bg);
+  color: var(--el-color-primary);
+}
+
+.act.danger:hover {
+  color: var(--el-color-danger);
+}
+
+.drag-handle {
+  cursor: grab;
+}
+
+.content {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-regular);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.6em;
+  word-break: break-all;
+}
+
+.content.empty {
+  color: var(--el-text-color-placeholder);
+}
+
+.card-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.latency {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--nav-icon-bg);
+  color: var(--el-text-color-secondary);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.latency.good { color: var(--el-color-success); background: var(--el-color-success-light-9); }
+.latency.ok { color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
+.latency.slow { color: var(--el-color-warning); background: var(--el-color-warning-light-9); }
+.latency.bad { color: var(--el-color-danger); background: var(--el-color-danger-light-9); }
 </style>

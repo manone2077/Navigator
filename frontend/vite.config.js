@@ -28,10 +28,12 @@ export default defineConfig({
       }
     }
   },
-  // 替换为后端所在目录，方便docker 打包部署；也可将build 直接删掉
-  build:{
-    outDir: 'C:/proj/java/Navigator/docker/dist',
-    assetsDir: './assets',
-    emptyOutDir:true
+  // 默认输出到同级目录下后端项目的 docker/dist，方便 docker 打包部署；
+  // 可通过环境变量 NAV_DIST 指定其它目录，例如：NAV_DIST=dist yarn build
+  build: {
+    outDir: process.env.NAV_DIST || fileURLToPath(new URL('../Navigator/docker/dist', import.meta.url)),
+    assetsDir: 'assets',
+    emptyOutDir: true,
+    chunkSizeWarningLimit: 1500,
   }
 })
