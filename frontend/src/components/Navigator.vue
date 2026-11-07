@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { VueDraggable } from 'vue-draggable-plus'
-import { Delete, Download, Lightning, MoreFilled, Moon, Plus, Rank, Search, Sunny, Upload } from '@element-plus/icons-vue'
+import { Delete, Download, Lightning, MoreFilled, Moon, Picture, Plus, Rank, Search, Sunny, Upload } from '@element-plus/icons-vue'
 import Site from '@/components/Site.vue'
 import SiteDialog from '@/components/SiteDialog.vue'
 import * as api from '@/service/api.js'
@@ -12,6 +12,7 @@ const sites = ref([])
 const loading = ref(true)
 const keyword = ref('')
 const speedLoading = ref(false)
+const dragging = ref(false)
 const dialogRef = ref()
 const searchRef = ref()
 const importInput = ref()
@@ -67,6 +68,7 @@ async function onDelete(site) {
 }
 
 async function onSortEnd() {
+  dragging.value = false
   try {
     await api.saveSort(sites.value.map((s) => s.id))
   } catch {
@@ -164,8 +166,22 @@ async function deleteAll() {
   }
 }
 
+async function refreshAllIcons() {
+  const loadingMsg = ElMessage({ message: '正在获取站点图标…', duration: 0, type: 'info' })
+  try {
+    const res = await api.refreshIcons()
+    sites.value = res.data || sites.value
+    ElMessage.success(res.msg)
+  } catch {
+    /* 已在拦截器中提示 */
+  } finally {
+    loadingMsg.close()
+  }
+}
+
 function onCommand(cmd) {
-  if (cmd === 'export') exportBackup()
+  if (cmd === 'icons') refreshAllIcons()
+  else if (cmd === 'export') exportBackup()
   else if (cmd === 'import') importInput.value.click()
   else if (cmd === 'deleteAll') deleteAll()
 }
@@ -185,13 +201,25 @@ function onSearchEnter() {
   if (filtered.value.length === 1) window.open(filtered.value[0].url, '_blank', 'noopener')
 }
 
+// 后台每 10 分钟自动测速，页面每分钟静默刷新一次以展示最新状态（页面不可见时跳过）
+let pollTimer
+function onVisible() {
+  if (!document.hidden && !dragging.value) load(true)
+}
+
 onMounted(() => {
   load()
   window.addEventListener('keydown', onKeydown)
+  document.addEventListener('visibilitychange', onVisible)
+  pollTimer = setInterval(() => {
+    if (!document.hidden && !speedLoading.value && !dragging.value) load(true)
+  }, 60 * 1000)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
+  document.removeEventListener('visibilitychange', onVisible)
   clearTimeout(refreshTimer)
+  clearInterval(pollTimer)
 })
 </script>
 
@@ -200,7 +228,10 @@ onBeforeUnmount(() => {
     <header class="topbar">
       <div class="topbar-inner">
         <div class="brand">
-          <img src="/favicon.ico" alt="" />
+          <svg class="logo" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
+            <path d="M15.5 8.5 13.4 13.4 8.5 15.5 10.6 10.6Z" fill="currentColor" />
+          </svg>
           <span>皮特导航</span>
         </div>
 
@@ -231,7 +262,8 @@ onBeforeUnmount(() => {
             <el-button :icon="MoreFilled" circle />
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="export" :icon="Download">导出备份</el-dropdown-item>
+                <el-dropdown-item command="icons" :icon="Picture">重新获取图标</el-dropdown-item>
+                <el-dropdown-item command="export" :icon="Download" divided>导出备份</el-dropdown-item>
                 <el-dropdown-item command="import" :icon="Upload">导入备份</el-dropdown-item>
                 <el-dropdown-item command="deleteAll" :icon="Delete" divided class="danger-item">删除所有站点</el-dropdown-item>
               </el-dropdown-menu>
@@ -275,6 +307,7 @@ onBeforeUnmount(() => {
         :animation="180"
         handle=".drag-handle"
         ghost-class="drag-ghost"
+        @start="dragging = true"
         @end="onSortEnd"
       >
         <Site v-for="site in sites" :key="site.id" :site="site" @edit="openEdit" @delete="onDelete" />
@@ -319,9 +352,10 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.brand img {
-  width: 28px;
-  height: 28px;
+.brand .logo {
+  width: 26px;
+  height: 26px;
+  color: var(--el-color-primary);
 }
 
 .search {

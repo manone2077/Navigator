@@ -15,3 +15,6 @@ export const uploadImage = (file) => {
   form.append('file', file)
   return http.post('upload', form).then((r) => '/images/' + r.data)
 }
+
+export const fetchIcon = (url) => http.post('fetchIcon', { url }).then((r) => r.data)
+export const refreshIcons = () => http.post('refreshIcons')

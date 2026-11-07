@@ -39,3 +39,8 @@ body {
     width: calc(100% - 24px) !important;
   }
 }
+
+/* 多数站点图标是为浅色背景设计的，深色模式下给图片图标一个浅色底，避免深色图标看不清 */
+html.dark .has-img {
+  background: #e8ebf0 !important;
+}

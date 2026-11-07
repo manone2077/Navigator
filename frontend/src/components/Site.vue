@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { Delete, EditPen, Rank } from '@element-plus/icons-vue'
-import { avatarColor, faviconOf, hostOf, latencyInfo } from '@/composables/site.js'
+import { avatarColor, faviconOf, hostOf, latencyInfo, timeAgo } from '@/composables/site.js'
 
 const props = defineProps({
   site: { type: Object, required: true },
@@ -9,52 +9,63 @@ const props = defineProps({
 })
 const emit = defineEmits(['edit', 'delete'])
 
-// 图标：自定义图标 -> 站点 favicon -> 文字头像
+// 图标：自定义/服务端获取的图标 -> 站点 favicon -> 文字头像
 const iconFailed = ref(false)
-const iconSrc = computed(() => props.site.icon || faviconOf(props.site.url))
+// 已知不可达的站点不再让浏览器去请求 favicon，直接显示文字头像
+const iconSrc = computed(() => props.site.icon || (props.site.status >= 88888 ? '' : faviconOf(props.site.url)))
 watch(iconSrc, () => (iconFailed.value = false))
 
-const latency = computed(() => latencyInfo(props.site.status))
+const latency = computed(() => latencyInfo(props.site.status, props.site.statusMsg))
+const latencyTip = computed(() => {
+  const ago = timeAgo(props.site.checkedAt)
+  return ago ? `${latency.value.tip}（${ago}测速）` : latency.value.tip
+})
 const host = computed(() => hostOf(props.site.url))
 const letter = computed(() => (props.site.title || host.value || '?').trim().charAt(0).toUpperCase())
+// 描述与名称相同（如 PVE / PVE）时不重复显示
+const description = computed(() => {
+  const c = (props.site.content || '').trim()
+  return c && c.toLowerCase() !== (props.site.title || '').trim().toLowerCase() ? c : ''
+})
 </script>
 
 <template>
   <a class="site-card" :href="site.url" target="_blank" rel="noopener noreferrer" :title="site.url">
-    <div class="card-top">
-      <div class="icon">
+    <div class="card-main">
+      <div class="icon" :class="{ 'has-img': iconSrc && !iconFailed }">
         <img v-if="iconSrc && !iconFailed" :src="iconSrc" alt="" loading="lazy" @error="iconFailed = true" />
         <span v-else class="letter" :style="{ background: avatarColor(site.title) }">{{ letter }}</span>
       </div>
       <div class="titles">
         <div class="title">{{ site.title }}</div>
-        <div class="host">{{ host }}</div>
-      </div>
-      <div class="actions" @click.prevent.stop>
-        <el-tooltip content="编辑" placement="top" :show-after="400">
-          <button class="act" aria-label="编辑" @click="emit('edit', site)"><el-icon><EditPen /></el-icon></button>
-        </el-tooltip>
-        <el-popconfirm
-          :title="`确定删除「${site.title}」吗？`"
-          confirm-button-text="删除"
-          cancel-button-text="取消"
-          confirm-button-type="danger"
-          width="220"
-          @confirm="emit('delete', site)"
-        >
-          <template #reference>
-            <button class="act danger" aria-label="删除"><el-icon><Delete /></el-icon></button>
-          </template>
-        </el-popconfirm>
-        <el-tooltip v-if="draggable" content="拖动排序" placement="top" :show-after="400">
-          <span class="act drag-handle" aria-label="拖动排序"><el-icon><Rank /></el-icon></span>
-        </el-tooltip>
+        <div class="meta">
+          <span class="host">{{ host }}</span>
+          <el-tooltip :content="latencyTip" placement="top" :show-after="200">
+            <span class="latency" :class="latency.level"><i class="dot" />{{ latency.text }}</span>
+          </el-tooltip>
+        </div>
       </div>
     </div>
-    <p class="content" :class="{ empty: !site.content }">{{ site.content || '暂无描述' }}</p>
-    <div class="card-bottom">
-      <el-tooltip :content="latency.tip" placement="top" :show-after="200">
-        <span class="latency" :class="latency.level"><i class="dot" />{{ latency.text }}</span>
+    <p v-if="description" class="content">{{ description }}</p>
+
+    <div class="actions" @click.prevent.stop>
+      <el-tooltip content="编辑" placement="top" :show-after="400">
+        <button class="act" aria-label="编辑" @click="emit('edit', site)"><el-icon><EditPen /></el-icon></button>
+      </el-tooltip>
+      <el-popconfirm
+        :title="`确定删除「${site.title}」吗？`"
+        confirm-button-text="删除"
+        cancel-button-text="取消"
+        confirm-button-type="danger"
+        width="220"
+        @confirm="emit('delete', site)"
+      >
+        <template #reference>
+          <button class="act danger" aria-label="删除"><el-icon><Delete /></el-icon></button>
+        </template>
+      </el-popconfirm>
+      <el-tooltip v-if="draggable" content="拖动排序" placement="top" :show-after="400">
+        <span class="act drag-handle" aria-label="拖动排序"><el-icon><Rank /></el-icon></span>
       </el-tooltip>
     </div>
   </a>
@@ -62,10 +73,11 @@ const letter = computed(() => (props.site.title || host.value || '?').trim().cha
 
 <style scoped>
 .site-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 16px;
+  padding: 14px 16px;
   border-radius: 14px;
   background: var(--nav-card-bg);
   border: 1px solid var(--nav-border);
@@ -81,7 +93,7 @@ const letter = computed(() => (props.site.title || host.value || '?').trim().cha
   border-color: var(--el-color-primary-light-5);
 }
 
-.card-top {
+.card-main {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -101,8 +113,8 @@ const letter = computed(() => (props.site.title || host.value || '?').trim().cha
 }
 
 .icon img {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
 }
 
@@ -123,38 +135,99 @@ const letter = computed(() => (props.site.title || host.value || '?').trim().cha
 }
 
 .title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
+  line-height: 22px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  min-width: 0;
+}
+
 .host {
-  margin-top: 2px;
+  flex: 1;
+  min-width: 0;
   font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: var(--el-text-color-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.content {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-regular);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+}
+
+.latency {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  line-height: 18px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--nav-icon-bg);
+  color: var(--el-text-color-secondary);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.latency.good { color: var(--el-color-success); background: var(--el-color-success-light-9); }
+.latency.ok { color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
+.latency.slow { color: var(--el-color-warning); background: var(--el-color-warning-light-9); }
+.latency.bad { color: var(--el-color-danger); background: var(--el-color-danger-light-9); }
+
+/* 操作按钮悬浮在右上角，不占用标题和地址的宽度 */
 .actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
   display: flex;
   gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: var(--nav-card-bg);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s ease;
 }
 
 .site-card:hover .actions,
 .site-card:focus-within .actions {
   opacity: 1;
+  pointer-events: auto;
 }
 
 /* 触屏设备没有 hover，始终显示操作按钮 */
 @media (hover: none) {
   .actions {
     opacity: 1;
+    pointer-events: auto;
+    box-shadow: none;
   }
 }
 
@@ -169,7 +242,7 @@ const letter = computed(() => (props.site.title || host.value || '?').trim().cha
   background: transparent;
   color: var(--el-text-color-secondary);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .act:hover {
@@ -184,51 +257,4 @@ const letter = computed(() => (props.site.title || host.value || '?').trim().cha
 .drag-handle {
   cursor: grab;
 }
-
-.content {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--el-text-color-regular);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  min-height: 2.6em;
-  word-break: break-all;
-}
-
-.content.empty {
-  color: var(--el-text-color-placeholder);
-}
-
-.card-bottom {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.latency {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: var(--nav-icon-bg);
-  color: var(--el-text-color-secondary);
-}
-
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.latency.good { color: var(--el-color-success); background: var(--el-color-success-light-9); }
-.latency.ok { color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
-.latency.slow { color: var(--el-color-warning); background: var(--el-color-warning-light-9); }
-.latency.bad { color: var(--el-color-danger); background: var(--el-color-danger-light-9); }
 </style>
