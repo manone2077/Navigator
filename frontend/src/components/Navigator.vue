@@ -2,11 +2,14 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { VueDraggable } from 'vue-draggable-plus'
-import { Delete, Download, Lightning, MoreFilled, Moon, Picture, Plus, Rank, Search, Sunny, Upload } from '@element-plus/icons-vue'
+import { Delete, Download, InfoFilled, Lightning, MoreFilled, Moon, Picture, Plus, Rank, Search, Sunny, SwitchButton, Upload, User } from '@element-plus/icons-vue'
 import Site from '@/components/Site.vue'
 import SiteDialog from '@/components/SiteDialog.vue'
 import * as api from '@/service/api.js'
 import { useTheme } from '@/composables/theme.js'
+import { auth, canEdit, logout } from '@/composables/auth.js'
+
+const emit = defineEmits(['login'])
 
 const sites = ref([])
 const loading = ref(true)
@@ -29,18 +32,30 @@ async function load(silent = false) {
   }
 }
 
+// 状态筛选：all 全部 / ok 可访问 / bad 异常 / untested 未测速
+const statusFilter = ref('all')
+const matchStatus = (s) => {
+  if (statusFilter.value === 'ok') return s.status >= 0 && s.status < 88888
+  if (statusFilter.value === 'bad') return s.status >= 88888
+  if (statusFilter.value === 'untested') return s.status == null || s.status < 0
+  return true
+}
 const filtered = computed(() => {
   const k = keyword.value.trim().toLowerCase()
-  if (!k) return sites.value
-  return sites.value.filter((s) => [s.title, s.content, s.url].some((v) => (v || '').toLowerCase().includes(k)))
+  return sites.value.filter(
+    (s) => matchStatus(s) && (!k || [s.title, s.content, s.url].some((v) => (v || '').toLowerCase().includes(k))),
+  )
 })
-const searching = computed(() => keyword.value.trim().length > 0)
+// 搜索或筛选时展示过滤结果，并禁用拖拽，避免排序错乱
+const searching = computed(() => keyword.value.trim().length > 0 || statusFilter.value !== 'all')
+const toggleFilter = (f) => (statusFilter.value = statusFilter.value === f ? 'all' : f)
 
 const stats = computed(() => {
   const tested = sites.value.filter((s) => s.status >= 0 && s.status < 88888)
   const bad = sites.value.filter((s) => s.status >= 88888).length
   const avg = tested.length ? Math.round(tested.reduce((a, s) => a + s.status, 0) / tested.length) : null
-  return { total: sites.value.length, online: tested.length, bad, avg }
+  const untested = sites.value.filter((s) => s.status == null || s.status < 0).length
+  return { total: sites.value.length, online: tested.length, bad, untested, avg }
 })
 
 // ---------- 站点操作 ----------
@@ -65,6 +80,12 @@ async function onDelete(site) {
   } catch {
     /* 已在拦截器中提示 */
   }
+}
+
+// 单个站点重新测速后更新列表
+function onSiteUpdated(site) {
+  const i = sites.value.findIndex((s) => s.id === site.id)
+  if (i >= 0) sites.value[i] = site
 }
 
 async function onSortEnd() {
@@ -179,8 +200,22 @@ async function refreshAllIcons() {
   }
 }
 
+async function doLogout() {
+  try {
+    await logout()
+    ElMessage.success('已退出登录')
+    if (!auth.guestView) return
+    load(true)
+  } catch {
+    /* 已在拦截器中提示 */
+  }
+}
+
 function onCommand(cmd) {
-  if (cmd === 'icons') refreshAllIcons()
+  if (cmd === 'logout') doLogout()
+  else if (cmd === 'login') emit('login')
+  else if (cmd === 'about') window.open('https://github.com/manone2077/Navigator', '_blank', 'noopener')
+  else if (cmd === 'icons') refreshAllIcons()
   else if (cmd === 'export') exportBackup()
   else if (cmd === 'import') importInput.value.click()
   else if (cmd === 'deleteAll') deleteAll()
@@ -251,10 +286,13 @@ onBeforeUnmount(() => {
         </el-input>
 
         <div class="tools">
-          <el-button type="primary" :icon="Plus" @click="openAdd"><span class="btn-text">添加站点</span></el-button>
-          <el-button class="speed-btn" :icon="Lightning" :loading="speedLoading" @click="runSpeedtest">
-            <span class="btn-text">{{ speedLoading ? '测速中' : '测速' }}</span>
-          </el-button>
+          <template v-if="canEdit">
+            <el-button type="primary" :icon="Plus" @click="openAdd"><span class="btn-text">添加站点</span></el-button>
+            <el-button class="speed-btn" :icon="Lightning" :loading="speedLoading" @click="runSpeedtest">
+              <span class="btn-text">{{ speedLoading ? '测速中' : '测速' }}</span>
+            </el-button>
+          </template>
+          <el-button v-else type="primary" plain :icon="User" @click="emit('login')"><span class="btn-text">登录</span></el-button>
           <el-tooltip :content="isDark ? '切换到浅色模式' : '切换到深色模式'" placement="bottom" :show-after="300">
             <el-button :icon="isDark ? Sunny : Moon" circle @click="toggleTheme" />
           </el-tooltip>
@@ -262,10 +300,19 @@ onBeforeUnmount(() => {
             <el-button :icon="MoreFilled" circle />
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="icons" :icon="Picture">重新获取图标</el-dropdown-item>
-                <el-dropdown-item command="export" :icon="Download" divided>导出备份</el-dropdown-item>
-                <el-dropdown-item command="import" :icon="Upload">导入备份</el-dropdown-item>
-                <el-dropdown-item command="deleteAll" :icon="Delete" divided class="danger-item">删除所有站点</el-dropdown-item>
+                <template v-if="canEdit">
+                  <el-dropdown-item command="icons" :icon="Picture">重新获取图标</el-dropdown-item>
+                  <el-dropdown-item command="export" :icon="Download" divided>导出备份</el-dropdown-item>
+                  <el-dropdown-item command="import" :icon="Upload">导入备份</el-dropdown-item>
+                  <el-dropdown-item command="deleteAll" :icon="Delete" divided class="danger-item">删除所有站点</el-dropdown-item>
+                </template>
+                <el-dropdown-item v-else command="login" :icon="User">登录</el-dropdown-item>
+                <el-dropdown-item v-if="auth.enabled && auth.loggedIn" command="logout" :icon="SwitchButton" divided>
+                  退出登录
+                </el-dropdown-item>
+                <el-dropdown-item command="about" :icon="InfoFilled" divided>
+                  关于<span class="version">{{ auth.version ? `v${auth.version}` : '' }}</span>
+                </el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -276,28 +323,59 @@ onBeforeUnmount(() => {
 
     <main class="main">
       <div v-if="sites.length" class="summary">
-        <span>共 <b>{{ stats.total }}</b> 个站点</span>
-        <span v-if="stats.online">· <b>{{ stats.online }}</b> 个可访问</span>
-        <span v-if="stats.bad" class="bad">· <b>{{ stats.bad }}</b> 个异常</span>
-        <span v-if="stats.avg != null">· 平均延迟 <b>{{ stats.avg }}</b> ms</span>
-        <span v-if="searching" class="hint">· 搜索到 {{ filtered.length }} 个</span>
-        <span v-else class="hint">· 拖动卡片右上角的 <el-icon><Rank /></el-icon> 可调整顺序</span>
+        <button class="chip" :class="{ active: statusFilter === 'all' }" @click="statusFilter = 'all'">
+          全部 <b>{{ stats.total }}</b>
+        </button>
+        <button v-if="stats.online" class="chip ok" :class="{ active: statusFilter === 'ok' }" @click="toggleFilter('ok')">
+          可访问 <b>{{ stats.online }}</b>
+        </button>
+        <button v-if="stats.bad" class="chip bad" :class="{ active: statusFilter === 'bad' }" @click="toggleFilter('bad')">
+          异常 <b>{{ stats.bad }}</b>
+        </button>
+        <button
+          v-if="stats.untested"
+          class="chip"
+          :class="{ active: statusFilter === 'untested' }"
+          @click="toggleFilter('untested')"
+        >
+          未测速 <b>{{ stats.untested }}</b>
+        </button>
+        <span v-if="stats.avg != null" class="avg">平均延迟 <b>{{ stats.avg }}</b> ms</span>
+        <span v-if="searching" class="hint">· 显示 {{ filtered.length }} 个</span>
+        <span v-else-if="canEdit" class="hint">· 拖动卡片右上角的 <el-icon><Rank /></el-icon> 可调整顺序</span>
       </div>
 
       <div v-if="loading" class="grid">
         <el-skeleton v-for="i in 6" :key="i" class="skeleton" animated :rows="2" />
       </div>
 
-      <el-empty v-else-if="!sites.length" description="还没有站点，先添加一个吧">
-        <el-button type="primary" :icon="Plus" @click="openAdd">添加站点</el-button>
-        <el-button :icon="Upload" @click="importInput.click()">导入备份</el-button>
+      <el-empty v-else-if="!sites.length" :description="canEdit ? '还没有站点，先添加一个吧' : '还没有站点'">
+        <template v-if="canEdit">
+          <el-button type="primary" :icon="Plus" @click="openAdd">添加站点</el-button>
+          <el-button :icon="Upload" @click="importInput.click()">导入备份</el-button>
+        </template>
       </el-empty>
 
-      <el-empty v-else-if="!filtered.length" :description="`没有找到与「${keyword}」相关的站点`" />
+      <el-empty v-else-if="!filtered.length" :description="keyword ? `没有找到与「${keyword}」相关的站点` : '没有符合条件的站点'">
+        <el-button @click="(keyword = ''), (statusFilter = 'all')">显示全部站点</el-button>
+      </el-empty>
 
       <!-- 搜索时展示过滤结果，禁用拖拽，避免排序错乱 -->
       <div v-else-if="searching" class="grid">
-        <Site v-for="site in filtered" :key="site.id" :site="site" :draggable="false" @edit="openEdit" @delete="onDelete" />
+        <Site
+          v-for="site in filtered"
+          :key="site.id"
+          :site="site"
+          :draggable="false"
+          :editable="canEdit"
+          @edit="openEdit"
+          @delete="onDelete"
+          @updated="onSiteUpdated"
+        />
+      </div>
+
+      <div v-else-if="!canEdit" class="grid">
+        <Site v-for="site in sites" :key="site.id" :site="site" :draggable="false" :editable="false" />
       </div>
 
       <VueDraggable
@@ -310,13 +388,14 @@ onBeforeUnmount(() => {
         @start="dragging = true"
         @end="onSortEnd"
       >
-        <Site v-for="site in sites" :key="site.id" :site="site" @edit="openEdit" @delete="onDelete" />
+        <Site v-for="site in sites" :key="site.id" :site="site" @edit="openEdit" @delete="onDelete" @updated="onSiteUpdated" />
       </VueDraggable>
     </main>
 
-    <el-button class="fab" type="primary" :icon="Plus" circle aria-label="添加站点" @click="openAdd" />
-
-    <SiteDialog ref="dialogRef" @saved="onSaved" />
+    <template v-if="canEdit">
+      <el-button class="fab" type="primary" :icon="Plus" circle aria-label="添加站点" @click="openAdd" />
+      <SiteDialog ref="dialogRef" @saved="onSaved" />
+    </template>
   </div>
 </template>
 
@@ -409,8 +488,47 @@ onBeforeUnmount(() => {
   color: var(--el-text-color-primary);
 }
 
-.summary .bad b {
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--nav-border);
+  background: var(--nav-card-bg);
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chip:hover {
+  border-color: var(--el-color-primary-light-5);
+}
+
+.chip.ok b {
+  color: var(--el-color-success);
+}
+
+.chip.bad b {
   color: var(--el-color-danger);
+}
+
+.chip.active {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+}
+
+.avg {
+  margin-left: 4px;
+}
+
+.version {
+  margin-left: 6px;
+  color: var(--el-text-color-placeholder);
+  font-size: 12px;
 }
 
 .summary .hint {

@@ -1,13 +1,44 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { Delete, EditPen, Rank } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { CopyDocument, Delete, EditPen, Loading, Rank } from '@element-plus/icons-vue'
 import { avatarColor, faviconOf, hostOf, latencyInfo, timeAgo } from '@/composables/site.js'
+import { speedtestOne } from '@/service/api.js'
 
 const props = defineProps({
   site: { type: Object, required: true },
   draggable: { type: Boolean, default: true },
+  editable: { type: Boolean, default: true },
 })
-const emit = defineEmits(['edit', 'delete'])
+const emit = defineEmits(['edit', 'delete', 'updated'])
+
+// 点击延迟标签重新测速
+const testing = ref(false)
+async function retest() {
+  if (!props.editable || testing.value) return
+  testing.value = true
+  try {
+    emit('updated', await speedtestOne(props.site.id))
+  } catch {
+    /* 已在拦截器中提示 */
+  } finally {
+    testing.value = false
+  }
+}
+
+async function copyUrl() {
+  try {
+    await navigator.clipboard.writeText(props.site.url)
+  } catch {
+    // 非 https 页面下 clipboard API 不可用，退回旧方式
+    const ta = Object.assign(document.createElement('textarea'), { value: props.site.url })
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    ta.remove()
+  }
+  ElMessage.success({ message: '地址已复制', grouping: true })
+}
 
 // 图标：自定义/服务端获取的图标 -> 站点 favicon -> 文字头像
 const iconFailed = ref(false)
@@ -18,7 +49,8 @@ watch(iconSrc, () => (iconFailed.value = false))
 const latency = computed(() => latencyInfo(props.site.status, props.site.statusMsg))
 const latencyTip = computed(() => {
   const ago = timeAgo(props.site.checkedAt)
-  return ago ? `${latency.value.tip}（${ago}测速）` : latency.value.tip
+  const base = ago ? `${latency.value.tip}（${ago}测速）` : latency.value.tip
+  return props.editable ? `${base}，点击重新测速` : base
 })
 const host = computed(() => hostOf(props.site.url))
 const letter = computed(() => (props.site.title || host.value || '?').trim().charAt(0).toUpperCase())
@@ -41,7 +73,14 @@ const description = computed(() => {
         <div class="meta">
           <span class="host">{{ host }}</span>
           <el-tooltip :content="latencyTip" placement="top" :show-after="200">
-            <span class="latency" :class="latency.level"><i class="dot" />{{ latency.text }}</span>
+            <span
+              class="latency"
+              :class="[latency.level, { clickable: editable }]"
+              @click.prevent.stop="retest"
+            >
+              <el-icon v-if="testing" class="is-loading"><Loading /></el-icon>
+              <i v-else class="dot" />{{ testing ? '测速中' : latency.text }}
+            </span>
           </el-tooltip>
         </div>
       </div>
@@ -49,6 +88,10 @@ const description = computed(() => {
     <p v-if="description" class="content">{{ description }}</p>
 
     <div class="actions" @click.prevent.stop>
+      <el-tooltip content="复制地址" placement="top" :show-after="400">
+        <button class="act" aria-label="复制地址" @click="copyUrl"><el-icon><CopyDocument /></el-icon></button>
+      </el-tooltip>
+      <template v-if="editable">
       <el-tooltip content="编辑" placement="top" :show-after="400">
         <button class="act" aria-label="编辑" @click="emit('edit', site)"><el-icon><EditPen /></el-icon></button>
       </el-tooltip>
@@ -67,6 +110,7 @@ const description = computed(() => {
       <el-tooltip v-if="draggable" content="拖动排序" placement="top" :show-after="400">
         <span class="act drag-handle" aria-label="拖动排序"><el-icon><Rank /></el-icon></span>
       </el-tooltip>
+      </template>
     </div>
   </a>
 </template>
@@ -186,6 +230,15 @@ const description = computed(() => {
   border-radius: 999px;
   background: var(--nav-icon-bg);
   color: var(--el-text-color-secondary);
+}
+
+.latency.clickable {
+  cursor: pointer;
+}
+
+.latency.clickable:hover {
+  filter: brightness(0.95);
+  box-shadow: 0 0 0 1px currentColor inset;
 }
 
 .dot {

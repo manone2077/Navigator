@@ -18,3 +18,5 @@ export const uploadImage = (file) => {
 
 export const fetchIcon = (url) => http.post('fetchIcon', { url }).then((r) => r.data)
 export const refreshIcons = () => http.post('refreshIcons')
+export const siteMeta = (url) => http.post('siteMeta', { url }, { silent: true }).then((r) => r.data)
+export const speedtestOne = (id) => http.post('speedtest/one', { id }).then((r) => r.data)

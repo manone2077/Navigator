@@ -1,8 +1,8 @@
 <script setup>
 import { computed, nextTick, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { MagicStick, RefreshLeft, Upload } from '@element-plus/icons-vue'
-import { addSite, fetchIcon, updateSite, uploadImage } from '@/service/api.js'
+import { Loading, MagicStick, RefreshLeft, Upload } from '@element-plus/icons-vue'
+import { addSite, fetchIcon, siteMeta, updateSite, uploadImage } from '@/service/api.js'
 import { avatarColor, faviconOf, normalizeUrl } from '@/composables/site.js'
 
 const emit = defineEmits(['saved'])
@@ -44,6 +44,8 @@ const previewIcon = computed(() => form.icon || faviconOf(form.url))
 /** 打开对话框；传入站点则为编辑（使用副本，取消时不会修改列表数据） */
 function open(site) {
   Object.assign(form, emptySite(), site ? JSON.parse(JSON.stringify(site)) : {})
+  autoTitle = ''
+  lastMetaUrl = ''
   iconFailed.value = false
   visible.value = true
   nextTick(() => formRef.value?.clearValidate())
@@ -54,16 +56,35 @@ function onOpened() {
   ;(isEdit.value ? null : urlInput.value)?.focus()
 }
 
-function onUrlBlur() {
+// 自动填写的名称（用户手动修改后不再覆盖）
+let autoTitle = ''
+let lastMetaUrl = ''
+const metaLoading = ref(false)
+
+async function onUrlBlur() {
   form.url = normalizeUrl(form.url)
   iconFailed.value = false
-  // 未填写名称时，使用域名作为默认名称
-  if (!form.title && form.url) {
-    try {
-      form.title = new URL(form.url).hostname.replace(/^www\./, '')
-    } catch {
-      /* ignore */
-    }
+  let host = ''
+  try {
+    host = new URL(form.url).hostname.replace(/^www\./, '')
+  } catch {
+    return
+  }
+  // 未填写名称时，先用域名作为默认名称
+  if (!form.title) form.title = autoTitle = host
+  // 添加站点时，自动获取页面标题和图标
+  if (isEdit.value || form.url === lastMetaUrl) return
+  lastMetaUrl = form.url
+  metaLoading.value = true
+  try {
+    const meta = await siteMeta(form.url)
+    if (form.url !== lastMetaUrl || !visible.value) return
+    if (meta.title && (!form.title || form.title === autoTitle)) form.title = autoTitle = meta.title
+    if (meta.icon && !form.icon) form.icon = meta.icon
+  } catch {
+    /* 获取失败不影响手动填写 */
+  } finally {
+    metaLoading.value = false
   }
 }
 
@@ -136,7 +157,20 @@ defineExpose({ open })
   >
     <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @submit.prevent="submit">
       <el-form-item label="站点地址" prop="url">
-        <el-input ref="urlInput" v-model="form.url" placeholder="例如 https://example.com" clearable @blur="onUrlBlur" @keyup.enter="submit" />
+        <el-input
+          ref="urlInput"
+          v-model="form.url"
+          placeholder="例如 192.168.1.2:8080 或 example.com"
+          clearable
+          @blur="onUrlBlur"
+          @keyup.enter="submit"
+        >
+          <template #suffix>
+            <el-tooltip v-if="metaLoading" content="正在获取站点名称和图标" placement="top">
+              <el-icon class="is-loading"><Loading /></el-icon>
+            </el-tooltip>
+          </template>
+        </el-input>
       </el-form-item>
       <el-form-item label="站点名称" prop="title">
         <el-input v-model="form.title" placeholder="请输入站点名称" maxlength="50" clearable @keyup.enter="submit" />
@@ -167,7 +201,7 @@ defineExpose({ open })
                 恢复默认
               </el-button>
             </div>
-            <span>添加时服务端会自动获取站点图标；获取不到时可手动上传（png/jpg/gif/webp/ico，≤5MB）</span>
+            <span>填写地址后会自动获取站点名称和图标；获取不到时可手动上传（png/jpg/gif/webp/ico，≤5MB）</span>
           </div>
           <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/x-icon,.ico" hidden @change="onFileChange" />
         </div>
