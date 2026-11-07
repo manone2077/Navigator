@@ -5,12 +5,12 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.3.4</version>
+        <version>3.5.16</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.kk</groupId>
     <artifactId>Navigator</artifactId>
-    <version>1.0.9</version>
+    <version>1.0.10</version>
     <name>Navigator</name>
     <description>Navigator</description>
     <url/>
@@ -30,16 +30,11 @@
         <java.version>17</java.version>
     </properties>
     <dependencies>
-        <dependency>
-            <groupId>com.alibaba</groupId>
-            <artifactId>fastjson</artifactId>
-            <version>2.0.53</version>
-        </dependency>
-
+        <!-- 只使用了 hutool 的 http 客户端，不再引入体积较大的 hutool-all；fastjson 未被使用已移除 -->
         <dependency>
             <groupId>cn.hutool</groupId>
-            <artifactId>hutool-all</artifactId>
-            <version>5.8.32</version>
+            <artifactId>hutool-http</artifactId>
+            <version>5.8.48</version>
         </dependency>
 
         <dependency>
@@ -69,10 +64,19 @@
     </dependencies>
 
     <build>
+        <finalName>navigator</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <!-- 生成 build-info，供 /api/health 返回版本号 -->
+                            <goal>build-info</goal>
+                        </goals>
+                    </execution>
+                </executions>
                 <configuration>
                     <excludes>
                         <exclude>

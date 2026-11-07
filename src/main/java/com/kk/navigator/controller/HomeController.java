@@ -36,6 +36,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -79,6 +80,7 @@ public class HomeController {
         sites.stream()
                 .filter(s -> !StringUtils.hasText(s.getIcon()))
                 .forEach(s -> CompletableFuture.runAsync(() -> autoIcon(s), speedtestPool));
+        cleanupIcons();
         if (sites.stream().noneMatch(s -> s.getSortOrder() == null)) {
             return;
         }
@@ -141,7 +143,12 @@ public class HomeController {
         if (error != null) {
             return R.fail(error);
         }
-        return R.success("更新站点成功", siteInfoDao.save(siteInfo));
+        String oldIcon = siteInfoDao.findById(siteInfo.getId()).map(SiteInfo::getIcon).orElse(null);
+        SiteInfo saved = siteInfoDao.save(siteInfo);
+        if (oldIcon != null && !oldIcon.equals(saved.getIcon())) {
+            deleteIconIfUnused(oldIcon);
+        }
+        return R.success("更新站点成功", saved);
     }
 
     @RequestMapping("/upload")
@@ -175,14 +182,16 @@ public class HomeController {
         if (siteInfo.getId() == null || !siteInfoDao.existsById(siteInfo.getId())) {
             return R.fail("无法找到站点信息");
         }
-        siteInfoDao.findById(siteInfo.getId()).ifPresent(s -> iconFetcher.deleteAuto(s.getIcon()));
+        String icon = siteInfoDao.findById(siteInfo.getId()).map(SiteInfo::getIcon).orElse(null);
         siteInfoDao.deleteById(siteInfo.getId());
+        deleteIconIfUnused(icon);
         return R.success("站点删除成功");
     }
 
     @RequestMapping("/deleteAll")
     public R deleteAll() {
         siteInfoDao.deleteAll();
+        iconFetcher.cleanup(Set.of(), 0);
         return R.success("删除所有站点信息成功");
     }
 
@@ -208,9 +217,14 @@ public class HomeController {
         return R.success("排序已保存");
     }
 
+    /**
+     * 导出备份：本地图标会转为 data URL 一并导出，导入到其它实例时图标不会丢失
+     */
     @RequestMapping("/export")
     public R export() {
-        return R.success("success", findAllSorted());
+        List<SiteInfo> sites = findAllSorted();
+        sites.forEach(s -> s.setIcon(iconFetcher.toDataUrl(s.getIcon())));
+        return R.success("success", sites);
     }
 
     /**
@@ -226,7 +240,10 @@ public class HomeController {
             }
             site.setId(null);
             site.setStatus(SiteInfo.STATUS_UNTESTED);
+            site.setStatusMsg(null);
+            site.setCheckedAt(null);
             site.setSortOrder(order++);
+            site.setIcon(importIcon(site.getIcon()));
             toSave.add(site);
         }
         siteInfoDao.saveAll(toSave).forEach(saved -> {
@@ -251,6 +268,21 @@ public class HomeController {
     }
 
     /**
+     * 根据地址获取站点标题和图标，用于添加站点时自动填写
+     */
+    @RequestMapping("/siteMeta")
+    public R siteMeta(@RequestBody SiteInfo siteInfo) {
+        if (siteInfo.getUrl() == null || !siteInfo.getUrl().trim().matches("(?i)^https?://.+")) {
+            return R.fail("请先填写正确的站点地址");
+        }
+        IconFetcher.SiteMeta meta = iconFetcher.fetchMeta(siteInfo.getUrl());
+        Map<String, String> data = new java.util.HashMap<>();
+        data.put("title", meta.title());
+        data.put("icon", meta.icon());
+        return R.success("success", data);
+    }
+
+    /**
      * 为所有未手动上传图标的站点重新获取图标
      */
     @RequestMapping("/refreshIcons")
@@ -269,6 +301,32 @@ public class HomeController {
     public R speedtest() {
         runSpeedtest();
         return R.success("测速完成", findAllSorted());
+    }
+
+    /**
+     * 测试单个站点
+     */
+    @RequestMapping("/speedtest/one")
+    public R speedtestOne(@RequestBody SiteInfo siteInfo) {
+        Optional<SiteInfo> site = siteInfo.getId() == null ? Optional.empty() : siteInfoDao.findById(siteInfo.getId());
+        if (site.isEmpty()) {
+            return R.fail("无法找到站点信息");
+        }
+        testSite(site.get());
+        return R.success("测速完成", siteInfoDao.findById(siteInfo.getId()).orElse(null));
+    }
+
+    /** 每天清理一次未被引用的图标文件 */
+    @Scheduled(initialDelay = 60 * 60 * 1000, fixedRate = 24 * 60 * 60 * 1000)
+    public void cleanupIcons() {
+        Set<String> referenced = new java.util.HashSet<>();
+        siteInfoDao.findAll().forEach(s -> {
+            if (s.getIcon() != null) {
+                referenced.add(s.getIcon());
+            }
+        });
+        // 保留 1 小时内的新文件：可能是表单中刚上传/获取、尚未保存的图标
+        iconFetcher.cleanup(referenced, 60 * 60 * 1000);
     }
 
     @Scheduled(initialDelay = 10 * 1000, fixedRate = 1000 * 60 * 10)
@@ -345,8 +403,29 @@ public class HomeController {
         }
         String old = site.getIcon();
         siteInfoDao.updateIcon(site.getId(), icon);
-        iconFetcher.deleteAuto(old);
+        deleteIconIfUnused(old);
         return true;
+    }
+
+    /** 删除不再被任何站点使用的本地图标 */
+    private void deleteIconIfUnused(String icon) {
+        if (IconFetcher.isLocal(icon) && siteInfoDao.countByIcon(icon) == 0) {
+            iconFetcher.delete(icon);
+        }
+    }
+
+    /** 处理导入的图标：data URL 保存为本地文件；引用的本地文件不存在时置空，之后自动获取 */
+    private String importIcon(String icon) {
+        if (!StringUtils.hasText(icon)) {
+            return null;
+        }
+        if (icon.startsWith("data:")) {
+            return iconFetcher.saveDataUrl(icon);
+        }
+        if (icon.startsWith("/images/") && !iconFetcher.exists(icon)) {
+            return null;
+        }
+        return icon;
     }
 
     private int nextSortOrder() {

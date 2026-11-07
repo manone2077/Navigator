@@ -18,6 +18,8 @@ public interface SiteInfoDao extends CrudRepository<SiteInfo, Integer> {
      */
     SiteInfo findSiteInfoById(Integer id);
 
+    long countByIcon(String icon);
+
     /**
      * 只更新测速状态，避免测速过程中覆盖用户同时修改的其它字段
      */

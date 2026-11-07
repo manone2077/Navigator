@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -41,8 +42,18 @@ public class IconFetcher {
     private static final Pattern REL_ICON = Pattern.compile("\\brel\\s*=\\s*[\"']?[^\"'>]*icon", Pattern.CASE_INSENSITIVE);
     private static final Pattern HREF = Pattern.compile("\\bhref\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))", Pattern.CASE_INSENSITIVE);
 
+    private static final java.util.Map<String, String> MIME = java.util.Map.of(
+            ".png", "image/png", ".jpg", "image/jpeg", ".gif", "image/gif", ".ico", "image/x-icon",
+            ".webp", "image/webp", ".svg", "image/svg+xml");
+    private static final Pattern TITLE = Pattern.compile("<title[^>]*>(.*?)</title>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern CHARSET = Pattern.compile("charset\\s*=\\s*[\"']?([\\w-]+)", Pattern.CASE_INSENSITIVE);
+
     @Value("${image.path}")
     private String imagePath;
+
+    /** 站点信息：页面标题与图标路径，均可能为 null */
+    public record SiteMeta(String title, String icon) {
+    }
 
     /**
      * 获取并保存图标
@@ -50,60 +61,186 @@ public class IconFetcher {
      * @return 图标访问路径（/images/xxx），获取失败返回 null
      */
     public String fetch(String siteUrl) {
+        return fetchMeta(siteUrl).icon();
+    }
+
+    /** 获取站点标题和图标（图标会保存到本地） */
+    public SiteMeta fetchMeta(String siteUrl) {
         URI base;
         try {
             base = URI.create(siteUrl.trim());
             if (base.getHost() == null) {
-                return null;
+                return new SiteMeta(null, null);
             }
         } catch (IllegalArgumentException e) {
-            return null;
+            return new SiteMeta(null, null);
         }
-        for (String candidate : candidates(base)) {
+        String html = null;
+        try {
+            html = decode(download(base.toString(), MAX_HTML_BYTES));
+        } catch (Exception e) {
+            log.debug("load page failed {}: {}", base, e.getMessage());
+        }
+        return new SiteMeta(title(html), saveIcon(base, html));
+    }
+
+    private String saveIcon(URI base, String html) {
+        for (String candidate : candidates(base, html)) {
             try {
                 byte[] data = download(candidate, MAX_ICON_BYTES);
                 String ext = data == null ? null : detectExtension(data);
                 if (ext == null) {
                     continue;
                 }
-                Path dir = Paths.get(imagePath);
-                Files.createDirectories(dir);
-                String name = AUTO_PREFIX + UUID.randomUUID() + ext;
-                Files.write(dir.resolve(name), data);
-                log.info("icon fetched: {} -> {}", candidate, name);
-                return "/images/" + name;
+                String icon = write(data, AUTO_PREFIX, ext);
+                log.info("icon fetched: {} -> {}", candidate, icon);
+                return icon;
             } catch (Exception e) {
                 log.debug("fetch icon failed {}: {}", candidate, e.getMessage());
             }
         }
-        log.info("no icon found for {}", siteUrl);
+        log.info("no icon found for {}", base);
         return null;
     }
 
-    /** 删除之前自动获取的图标文件 */
-    public void deleteAuto(String icon) {
-        if (!isAuto(icon)) {
+    /** 根据页面中声明的编码解码（兼容 GBK 等非 UTF-8 页面） */
+    private static String decode(byte[] data) {
+        if (data == null) {
+            return null;
+        }
+        String head = new String(data, 0, Math.min(data.length, 4096), StandardCharsets.ISO_8859_1);
+        Matcher m = CHARSET.matcher(head);
+        if (m.find()) {
+            try {
+                return new String(data, java.nio.charset.Charset.forName(m.group(1)));
+            } catch (Exception ignored) {
+                // 不支持的编码按 UTF-8 处理
+            }
+        }
+        return new String(data, StandardCharsets.UTF_8);
+    }
+
+    private static String title(String html) {
+        if (html == null) {
+            return null;
+        }
+        Matcher m = TITLE.matcher(html);
+        if (!m.find()) {
+            return null;
+        }
+        String t = m.group(1).replaceAll("\\s+", " ").trim()
+                .replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+                .replace("&quot;", "\"").replace("&#39;", "'").replace("&nbsp;", " ");
+        if (t.isEmpty()) {
+            return null;
+        }
+        return t.length() > 50 ? t.substring(0, 50) : t;
+    }
+
+    public static boolean isAuto(String icon) {
+        return isLocal(icon) && icon.startsWith("/images/" + AUTO_PREFIX);
+    }
+
+    /** 是否为保存在本地图片目录中的图标 */
+    public static boolean isLocal(String icon) {
+        return icon != null && icon.startsWith("/images/") && !icon.contains("..") && icon.indexOf('/', 8) < 0;
+    }
+
+    private Path localPath(String icon) {
+        return Paths.get(imagePath).resolve(icon.substring("/images/".length()));
+    }
+
+    public boolean exists(String icon) {
+        return isLocal(icon) && Files.isRegularFile(localPath(icon));
+    }
+
+    /** 删除本地图标文件 */
+    public void delete(String icon) {
+        if (!isLocal(icon)) {
             return;
         }
         try {
-            Files.deleteIfExists(Paths.get(imagePath).resolve(icon.substring("/images/".length())));
+            Files.deleteIfExists(localPath(icon));
         } catch (Exception e) {
             log.debug("delete icon failed: {}", e.getMessage());
         }
     }
 
-    public static boolean isAuto(String icon) {
-        return icon != null && icon.startsWith("/images/" + AUTO_PREFIX) && !icon.contains("..");
+    /** 本地图标转为 data URL，用于导出备份；非本地图标或文件不存在时原样返回 */
+    public String toDataUrl(String icon) {
+        if (!exists(icon)) {
+            return icon;
+        }
+        try {
+            byte[] data = Files.readAllBytes(localPath(icon));
+            String ext = detectExtension(data);
+            if (ext == null) {
+                return icon;
+            }
+            return "data:" + MIME.get(ext) + ";base64," + Base64.getEncoder().encodeToString(data);
+        } catch (Exception e) {
+            return icon;
+        }
+    }
+
+    /** 保存导入备份中的 data URL 图标，返回本地路径；内容不是图片时返回 null */
+    public String saveDataUrl(String dataUrl) {
+        int comma = dataUrl == null ? -1 : dataUrl.indexOf(',');
+        if (comma < 0 || !dataUrl.startsWith("data:image/") || !dataUrl.substring(0, comma).endsWith(";base64")) {
+            return null;
+        }
+        try {
+            byte[] data = Base64.getDecoder().decode(dataUrl.substring(comma + 1));
+            String ext = data.length > MAX_ICON_BYTES ? null : detectExtension(data);
+            return ext == null ? null : write(data, "up-", ext);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 删除没有被任何站点引用、且修改时间早于 minAgeMs 的图标文件
+     * （例如编辑时上传了图标但取消保存、旧版本替换图标后遗留的文件）
+     */
+    public int cleanup(Set<String> referenced, long minAgeMs) {
+        Path dir = Paths.get(imagePath);
+        if (!Files.isDirectory(dir)) {
+            return 0;
+        }
+        long deadline = System.currentTimeMillis() - minAgeMs;
+        int count = 0;
+        try (var files = Files.list(dir)) {
+            for (Path f : files.filter(Files::isRegularFile).toList()) {
+                if (!referenced.contains("/images/" + f.getFileName())
+                        && Files.getLastModifiedTime(f).toMillis() <= deadline) {
+                    Files.deleteIfExists(f);
+                    count++;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("cleanup icons failed: {}", e.getMessage());
+        }
+        if (count > 0) {
+            log.info("removed {} unused icon files", count);
+        }
+        return count;
+    }
+
+    private String write(byte[] data, String prefix, String ext) throws java.io.IOException {
+        Path dir = Paths.get(imagePath);
+        Files.createDirectories(dir);
+        String name = prefix + UUID.randomUUID() + ext;
+        Files.write(dir.resolve(name), data);
+        return "/images/" + name;
     }
 
     /** 候选图标地址：页面中声明的图标（按尺寸从大到小）+ 根路径 favicon.ico */
-    private List<String> candidates(URI base) {
+    private List<String> candidates(URI base, String html) {
         Set<String> result = new LinkedHashSet<>();
         try {
-            byte[] html = download(base.toString(), MAX_HTML_BYTES);
             if (html != null) {
                 List<String[]> icons = new ArrayList<>();
-                Matcher m = LINK_TAG.matcher(new String(html, StandardCharsets.UTF_8));
+                Matcher m = LINK_TAG.matcher(html);
                 while (m.find()) {
                     String tag = m.group();
                     if (!REL_ICON.matcher(tag).find()) {
@@ -153,7 +290,7 @@ public class IconFetcher {
     }
 
     /** 根据文件头判断图片类型，非图片返回 null */
-    static String detectExtension(byte[] d) {
+    public static String detectExtension(byte[] d) {
         if (d.length < 4) {
             return null;
         }
