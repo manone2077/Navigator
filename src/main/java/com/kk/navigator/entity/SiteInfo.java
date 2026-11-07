@@ -6,6 +6,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 @Data
 @Entity
 public class SiteInfo {
@@ -29,4 +31,8 @@ public class SiteInfo {
     private long status = STATUS_UNTESTED;
     /** 排序序号，越小越靠前；为空时按 id 排在最后 */
     private Integer sortOrder;
+    /** 测速失败原因 */
+    private String statusMsg;
+    /** 最近一次测速时间 */
+    private LocalDateTime checkedAt;
 }

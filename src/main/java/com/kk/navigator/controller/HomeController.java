@@ -3,6 +3,7 @@ package com.kk.navigator.controller;
 import com.kk.navigator.dao.SiteInfoDao;
 import com.kk.navigator.entity.R;
 import com.kk.navigator.entity.SiteInfo;
+import com.kk.navigator.util.IconFetcher;
 import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -18,7 +19,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.InetSocketAddress;
+import java.net.NoRouteToHostException;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.net.URI;
@@ -27,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -57,6 +61,8 @@ public class HomeController {
 
     @Resource
     private SiteInfoDao siteInfoDao;
+    @Resource
+    private IconFetcher iconFetcher;
     @Value("${image.path}")
     private String imagePath;
 
@@ -69,6 +75,10 @@ public class HomeController {
     @EventListener(ApplicationReadyEvent.class)
     public void initSortOrder() {
         List<SiteInfo> sites = findAllSorted();
+        // 旧版本升级或之前获取失败的站点，启动后在后台自动获取图标
+        sites.stream()
+                .filter(s -> !StringUtils.hasText(s.getIcon()))
+                .forEach(s -> CompletableFuture.runAsync(() -> autoIcon(s), speedtestPool));
         if (sites.stream().noneMatch(s -> s.getSortOrder() == null)) {
             return;
         }
@@ -116,6 +126,9 @@ public class HomeController {
         }
         SiteInfo saved = siteInfoDao.save(siteInfo);
         CompletableFuture.runAsync(() -> testSite(saved), speedtestPool);
+        if (!StringUtils.hasText(saved.getIcon())) {
+            CompletableFuture.runAsync(() -> autoIcon(saved), speedtestPool);
+        }
         return R.success(isNew ? "站点添加成功" : "站点保存成功", saved);
     }
 
@@ -162,6 +175,7 @@ public class HomeController {
         if (siteInfo.getId() == null || !siteInfoDao.existsById(siteInfo.getId())) {
             return R.fail("无法找到站点信息");
         }
+        siteInfoDao.findById(siteInfo.getId()).ifPresent(s -> iconFetcher.deleteAuto(s.getIcon()));
         siteInfoDao.deleteById(siteInfo.getId());
         return R.success("站点删除成功");
     }
@@ -215,8 +229,40 @@ public class HomeController {
             site.setSortOrder(order++);
             toSave.add(site);
         }
-        siteInfoDao.saveAll(toSave).forEach(saved -> CompletableFuture.runAsync(() -> testSite(saved), speedtestPool));
+        siteInfoDao.saveAll(toSave).forEach(saved -> {
+            CompletableFuture.runAsync(() -> testSite(saved), speedtestPool);
+            if (!StringUtils.hasText(saved.getIcon())) {
+                CompletableFuture.runAsync(() -> autoIcon(saved), speedtestPool);
+            }
+        });
         return R.success("成功导入 " + toSave.size() + " 个站点", toSave.size());
+    }
+
+    /**
+     * 由服务端获取指定地址的图标，返回图标路径（不修改站点数据，供编辑表单使用）
+     */
+    @RequestMapping("/fetchIcon")
+    public R fetchIcon(@RequestBody SiteInfo siteInfo) {
+        if (siteInfo.getUrl() == null || !siteInfo.getUrl().trim().matches("(?i)^https?://.+")) {
+            return R.fail("请先填写正确的站点地址");
+        }
+        String icon = iconFetcher.fetch(siteInfo.getUrl());
+        return icon == null ? R.fail("未能获取到该站点的图标，可手动上传") : R.success("图标获取成功", icon);
+    }
+
+    /**
+     * 为所有未手动上传图标的站点重新获取图标
+     */
+    @RequestMapping("/refreshIcons")
+    public R refreshIcons() {
+        List<SiteInfo> targets = findAllSorted().stream()
+                .filter(s -> !StringUtils.hasText(s.getIcon()) || IconFetcher.isAuto(s.getIcon()))
+                .toList();
+        List<CompletableFuture<Boolean>> futures = targets.stream()
+                .map(s -> CompletableFuture.supplyAsync(() -> autoIcon(s), speedtestPool))
+                .toList();
+        long ok = futures.stream().filter(CompletableFuture::join).count();
+        return R.success("已更新 " + ok + "/" + targets.size() + " 个站点的图标", findAllSorted());
     }
 
     @RequestMapping("/speedtest")
@@ -250,6 +296,7 @@ public class HomeController {
      */
     private void testSite(SiteInfo site) {
         long status;
+        String msg = null;
         String host = null;
         try {
             URI uri = URI.create(site.getUrl().trim());
@@ -269,13 +316,37 @@ public class HomeController {
             }
             log.info("speed: {} delay {}ms", host, status);
         } catch (SocketTimeoutException e) {
-            log.warn("超时无法到达主机,{}", host);
             status = SiteInfo.STATUS_TIMEOUT;
-        } catch (Exception e) {
-            log.warn("{} --> {}", e.getMessage(), host);
+            msg = "连接超时（5 秒内无响应）";
+        } catch (UnknownHostException e) {
             status = SiteInfo.STATUS_UNREACHABLE;
+            msg = "域名无法解析";
+        } catch (ConnectException e) {
+            status = SiteInfo.STATUS_UNREACHABLE;
+            msg = "连接被拒绝（端口未开放或服务未启动）";
+        } catch (NoRouteToHostException e) {
+            status = SiteInfo.STATUS_UNREACHABLE;
+            msg = "无法路由到主机（主机离线或网络不通）";
+        } catch (Exception e) {
+            status = SiteInfo.STATUS_UNREACHABLE;
+            msg = e.getMessage();
         }
-        siteInfoDao.updateStatus(site.getId(), status);
+        if (msg != null) {
+            log.warn("speed: {} {}", host, msg);
+        }
+        siteInfoDao.updateStatus(site.getId(), status, msg, LocalDateTime.now());
+    }
+
+    /** 自动获取图标并保存，返回是否成功 */
+    private boolean autoIcon(SiteInfo site) {
+        String icon = iconFetcher.fetch(site.getUrl());
+        if (icon == null) {
+            return false;
+        }
+        String old = site.getIcon();
+        siteInfoDao.updateIcon(site.getId(), icon);
+        iconFetcher.deleteAuto(old);
+        return true;
     }
 
     private int nextSortOrder() {

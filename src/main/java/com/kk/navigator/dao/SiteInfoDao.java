@@ -7,6 +7,8 @@ import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+
 
 public interface SiteInfoDao extends CrudRepository<SiteInfo, Integer> {
     /**
@@ -21,8 +23,14 @@ public interface SiteInfoDao extends CrudRepository<SiteInfo, Integer> {
      */
     @Transactional
     @Modifying
-    @Query("update SiteInfo s set s.status = :status where s.id = :id")
-    int updateStatus(@Param("id") Integer id, @Param("status") long status);
+    @Query("update SiteInfo s set s.status = :status, s.statusMsg = :msg, s.checkedAt = :checkedAt where s.id = :id")
+    int updateStatus(@Param("id") Integer id, @Param("status") long status, @Param("msg") String msg,
+                     @Param("checkedAt") LocalDateTime checkedAt);
+
+    @Transactional
+    @Modifying
+    @Query("update SiteInfo s set s.icon = :icon where s.id = :id")
+    int updateIcon(@Param("id") Integer id, @Param("icon") String icon);
 
     @Transactional
     @Modifying

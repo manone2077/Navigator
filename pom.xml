@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.kk</groupId>
     <artifactId>Navigator</artifactId>
-    <version>1.0.8</version>
+    <version>1.0.9</version>
     <name>Navigator</name>
     <description>Navigator</description>
     <url/>
