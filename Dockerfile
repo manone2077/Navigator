@@ -18,6 +18,7 @@ ARG APK_MIRROR
 RUN if [ -n "$APK_MIRROR" ]; then sed -i "s#https\?://dl-cdn.alpinelinux.org#${APK_MIRROR}#g" /etc/apk/repositories; fi \
  && apk add --no-cache nginx tzdata ca-certificates
 COPY --from=jre /opt/jre /opt/jre
+RUN ln -s /opt/jre/bin/java /usr/bin/java
 ENV PATH=/opt/jre/bin:$PATH \
     TZ=Asia/Shanghai \
     JAVA_OPTS="-XX:+UseSerialGC -Xss512k -Xms32m -Xmx192m"
