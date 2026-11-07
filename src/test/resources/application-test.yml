@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:navtest;DB_CLOSE_DELAY=-1
+navigator:
+  scheduling:
+    enabled: false
+image:
+  path: ${java.io.tmpdir}/navigator-test/images/
+assets:
+  path: ${java.io.tmpdir}/navigator-test/assets/

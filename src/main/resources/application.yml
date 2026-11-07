@@ -8,10 +8,20 @@ spring:
       username: sa
       password: password
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
     defer-datasource-initialization: true
     generate-ddl: true
+    open-in-view: false
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
   profiles:
     active: prod
 server:
   port: 8000
+
+navigator:
+  # 访问密码，未设置时不启用登录；docker 中通过环境变量 NAV_PASSWORD 设置
+  password: ${NAV_PASSWORD:}
+  # 是否允许未登录用户浏览站点（只读）
+  guest-view: ${NAV_GUEST_VIEW:false}

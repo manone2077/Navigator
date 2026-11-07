@@ -3,7 +3,7 @@ package com.kk.navigator.util;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpConfig;
 import cn.hutool.http.HttpResponse;
-import com.kk.navigator.entity.Setting; // 修改引用的类名
+import com.kk.navigator.entity.Setting;
 import com.kk.navigator.repository.SettingRepository;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -18,18 +18,23 @@ public class ScheduleTask {
     @Resource
     private SettingRepository settingRepository;
 
-    @Scheduled(initialDelay = 5000, fixedRate = 5000)
+    /**
+     * 自动签到（功能开发中）。原先每 5 秒执行一次且在无配置时持续输出 error 日志，
+     * 现调整为每 30 分钟执行一次，无配置时静默跳过。
+     */
+    @Scheduled(initialDelay = 60 * 1000, fixedRate = 30 * 60 * 1000)
     private void checkin() {
-        log.info("checkin");
-        Setting setting = settingRepository.findFirstByOrderByLastModifiedDateDesc(); // 修改引用的类名
-        if (setting == null) {
-            log.error("No configuration found in the database.");
+        Setting setting = settingRepository.findFirstByOrderByLastModifiedDateDesc();
+        if (setting == null || setting.getCheckinUrl() == null || setting.getCheckinUrl().isBlank()) {
+            log.debug("No checkin configuration found, skip.");
             return;
         }
 
         HttpConfig httpConfig = new HttpConfig();
-        Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(setting.getProxyHost(), setting.getProxyPort()));
-        httpConfig.setProxy(proxy);
+        if (setting.getProxyHost() != null && !setting.getProxyHost().isBlank() && setting.getProxyPort() > 0) {
+            Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(setting.getProxyHost(), setting.getProxyPort()));
+            httpConfig.setProxy(proxy);
+        }
 
         try {
             HttpResponse resp = HttpRequest.get(setting.getCheckinUrl())
