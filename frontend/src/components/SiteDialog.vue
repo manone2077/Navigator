@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Loading, MagicStick, RefreshLeft, Upload } from '@element-plus/icons-vue'
 import { addSite, fetchIcon, siteMeta, updateSite, uploadImage } from '@/service/api.js'
@@ -40,6 +40,8 @@ const rules = {
 }
 
 const previewIcon = computed(() => form.icon || faviconOf(form.url))
+// 图标地址变化（如自动获取到图标）时重新尝试加载
+watch(previewIcon, () => (iconFailed.value = false))
 
 /** 打开对话框；传入站点则为编辑（使用副本，取消时不会修改列表数据） */
 function open(site) {

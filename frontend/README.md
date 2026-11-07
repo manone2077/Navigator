@@ -2,6 +2,8 @@
 
 Navigator for website management，后端及 Docker 部署见 [Navigator](https://github.com/manone2077/Navigator)
 
+![主界面](https://raw.githubusercontent.com/manone2077/Navigator/master/images/nav.png)
+
 ## 开发
 
 ```shell
