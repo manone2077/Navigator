@@ -1,0 +1,8 @@
+# 构建上下文只需要源码，镜像内会重新构建前端和后端
+.git
+target
+frontend/node_modules
+frontend/dist
+docker/dist
+images
+*.md

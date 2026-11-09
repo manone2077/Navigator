@@ -23,7 +23,7 @@ class AuthTests {
     MockMvc mvc;
 
     Cookie login(String password, String ip) throws Exception {
-        var res = mvc.perform(post("/api/auth/login").header("X-Real-IP", ip).contentType(MediaType.APPLICATION_JSON)
+        var res = mvc.perform(post("/api/auth/login").header("X-Real-IP", ip).header("X-Requested-With", "XMLHttpRequest").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"password\":\"" + password + "\"}")).andReturn().getResponse();
         return res.getCookie("nav_token");
     }
@@ -34,7 +34,7 @@ class AuthTests {
         mvc.perform(get("/api/auth/status")).andExpect(content().string(org.hamcrest.Matchers.containsString("\"loggedIn\":false")));
         // 访客可浏览但不能修改
         mvc.perform(get("/api/all")).andExpect(status().isOk());
-        mvc.perform(post("/api/deleteAll")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/deleteAll").header("X-Requested-With", "XMLHttpRequest")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/export")).andExpect(status().isUnauthorized());
     }
 

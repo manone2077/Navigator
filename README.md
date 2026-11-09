@@ -57,11 +57,21 @@ services:
 
 ## 开发
 
-前端项目：[Navigator_front](https://github.com/manone2077/Navigator_front)（Vue 3 + Element Plus），后端为 Spring Boot 3 + H2，镜像内由 nginx 提供页面并代理 `/api`。
+```
+Navigator/
+├── frontend/   前端（Vue 3 + Element Plus），原 Navigator_front 仓库已合并到这里
+├── src/        后端（Spring Boot 3 + H2）
+├── docker/     nginx 配置、启动脚本、镜像冒烟测试
+└── Dockerfile  一次构建前端 + 后端 + 精简 JRE
+```
 
-- 本地构建：两个项目放在同一目录，前端执行 `yarn build`（输出到本项目 `docker/dist`），再执行 `./mvnw package && docker build .`（国内可加 `--build-arg APK_MIRROR=https://mirrors.aliyun.com`）
-- 测试：`./mvnw test`
-- 发布：在 `release/vX.Y.Z` 分支执行 `git push --atomic origin release/vX.Y.Z vX.Y.Z`，GitHub Actions 会构建前端、运行测试并推送镜像 `vX.Y.Z` 与 `latest`；前端有改动时先给前端打同名标签。发布后将 release 分支合并回 `master` 和 `dev`。
+镜像内由 nginx 提供页面和图标，并把 `/api` 转发给后端。
+
+- 本地开发：后端 `./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`；前端 `cd frontend && yarn && yarn dev`（`/api` 代理到 8000 端口）
+- 构建镜像：`docker build -t navigator .`（国内可加 `--build-arg APK_MIRROR=https://mirrors.aliyun.com`）
+- 测试：`./mvnw test`；镜像冒烟测试（含模拟从旧版本升级）：`docker/smoke-test.sh navigator greatpower/navigator:latest`
+- CI：推送任意分支或提交 PR 都会构建前端并运行后端测试；推送 `release/vX.Y.Z` 分支或 `vX.Y.Z` 标签时，冒烟测试通过后才会推送镜像 `vX.Y.Z` 与 `latest`
+- 发布：在 `release/vX.Y.Z` 分支执行 `git push --atomic origin release/vX.Y.Z vX.Y.Z`，发布后将 release 分支合并回 `master` 和 `dev`
 
 ## Todo
 

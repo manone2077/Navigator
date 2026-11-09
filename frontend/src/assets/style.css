@@ -1,0 +1,46 @@
+:root {
+  --nav-bg: #f4f6fb;
+  --nav-card-bg: #ffffff;
+  --nav-icon-bg: #f1f3f8;
+  --nav-border: rgba(15, 23, 42, 0.06);
+  --nav-topbar-bg: rgba(255, 255, 255, 0.8);
+  --nav-shadow-hover: 0 10px 28px rgba(31, 45, 80, 0.1);
+}
+
+html.dark {
+  --nav-bg: #111318;
+  --nav-card-bg: #1b1e25;
+  --nav-icon-bg: #262a33;
+  --nav-border: rgba(255, 255, 255, 0.07);
+  --nav-topbar-bg: rgba(20, 22, 28, 0.8);
+  --nav-shadow-hover: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--nav-bg);
+  color: var(--el-text-color-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.el-dropdown-menu__item.danger-item {
+  color: var(--el-color-danger);
+}
+
+@media (max-width: 760px) {
+  .el-dialog.site-dialog {
+    width: calc(100% - 24px) !important;
+  }
+}
+
+/* 多数站点图标是为浅色背景设计的，深色模式下给图片图标一个浅色底，避免深色图标看不清 */
+html.dark .has-img {
+  background: #e8ebf0 !important;
+}

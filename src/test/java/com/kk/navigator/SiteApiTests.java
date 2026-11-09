@@ -45,8 +45,8 @@ class SiteApiTests {
 
     JsonNode call(String path, Object body) throws Exception {
         String content = mvc.perform(post("/api/" + path).contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Requested-With", "XMLHttpRequest")
                         .content(body instanceof String str ? str : json.writeValueAsString(body)))
-                .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         return json.readTree(content);
     }
@@ -83,7 +83,7 @@ class SiteApiTests {
         assertThat(titles).containsExactly("c", "a", "b");
 
         assertThat(call("delete", "{\"id\":" + a + "}").get("code").asInt()).isEqualTo(200);
-        assertThat(call("delete", "{\"id\":" + a + "}").get("code").asInt()).isEqualTo(400);
+        assertThat(call("delete", "{\"id\":" + a + "}").get("code").asInt()).isEqualTo(404);
         assertThat(all()).hasSize(2);
         call("deleteAll", "{}");
         assertThat(all()).isEmpty();
@@ -94,7 +94,7 @@ class SiteApiTests {
         int id = add("old", "http://127.0.0.1:1");
         call("update", "{\"id\":" + id + ",\"title\":\"new\",\"url\":\"http://127.0.0.1:1\"}");
         assertThat(all().get(0).get("title").asText()).isEqualTo("new");
-        assertThat(call("update", "{\"id\":99999,\"title\":\"x\",\"url\":\"http://127.0.0.1:1\"}").get("code").asInt()).isEqualTo(400);
+        assertThat(call("update", "{\"id\":99999,\"title\":\"x\",\"url\":\"http://127.0.0.1:1\"}").get("code").asInt()).isEqualTo(404);
     }
 
     @Test
@@ -108,10 +108,12 @@ class SiteApiTests {
 
     @Test
     void uploadOnlyAcceptsImages() throws Exception {
-        String ok = mvc.perform(multipart("/api/upload").file(new MockMultipartFile("file", "a.png", "image/png", PNG)))
+        String ok = mvc.perform(multipart("/api/upload").file(new MockMultipartFile("file", "a.png", "image/png", PNG))
+                        .header("X-Requested-With", "XMLHttpRequest"))
                 .andReturn().getResponse().getContentAsString();
         assertThat(json.readTree(ok).get("data").asText()).endsWith(".png");
-        String bad = mvc.perform(multipart("/api/upload").file(new MockMultipartFile("file", "a.html", "text/html", "<script>".getBytes())))
+        String bad = mvc.perform(multipart("/api/upload").file(new MockMultipartFile("file", "a.html", "text/html", "<script>".getBytes()))
+                        .header("X-Requested-With", "XMLHttpRequest"))
                 .andReturn().getResponse().getContentAsString();
         assertThat(json.readTree(bad).get("code").asInt()).isEqualTo(400);
     }
