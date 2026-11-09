@@ -28,10 +28,9 @@ export default defineConfig({
       }
     }
   },
-  // 默认输出到同级目录下后端项目的 docker/dist，方便 docker 打包部署；
-  // 可通过环境变量 NAV_DIST 指定其它目录，例如：NAV_DIST=dist yarn build
+  // 默认输出到 frontend/dist；Docker 构建时会在镜像内单独构建前端，无需手动复制
   build: {
-    outDir: process.env.NAV_DIST || fileURLToPath(new URL('../Navigator/docker/dist', import.meta.url)),
+    outDir: process.env.NAV_DIST || 'dist',
     assetsDir: 'assets',
     emptyOutDir: true,
     chunkSizeWarningLimit: 1500,

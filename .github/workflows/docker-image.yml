@@ -3,28 +3,58 @@ name: Build and Push Docker Image on Release Branch
 on:
   push:
     branches:
-      - release/*  # 匹配所有以 release/ 开头的分支
+      - '**'        # 所有分支：运行测试；release/* 分支还会发布镜像
     tags:
-      - '*'  # 保留标签触发
+      - '*'         # 标签：运行测试并发布镜像
+  pull_request:
   workflow_dispatch:
-    inputs:
-      front_ref:
-        description: '前端 Navigator_front 使用的分支或标签（留空则优先使用同名标签，否则 master）'
-        required: false
-        default: ''
 
-env:
-  FRONT_REPO: manone2077/Navigator_front
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type == 'branch' }}
 
 jobs:
-  build-and-push:
+  test:
+    name: 构建与测试
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          yarn install --frozen-lockfile
+          yarn build
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Backend tests
+        run: mvn -B verify
+
+  release:
+    name: 发布镜像
+    needs: test
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && (github.ref_type == 'tag' || startsWith(github.ref_name, 'release/')))
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code with all history
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Ensure all history is fetched to get tags
+          fetch-depth: 0  # 需要标签信息
 
       - name: Determine tag
         id: tag
@@ -47,55 +77,6 @@ jobs:
           echo "skip=${SKIP}" >> $GITHUB_OUTPUT
           echo "Image tag: ${TAG}, skip: ${SKIP}"
 
-      - name: Resolve frontend ref
-        if: steps.tag.outputs.skip != 'true'
-        run: |
-          REF="${{ github.event.inputs.front_ref }}"
-          if [ -z "$REF" ]; then
-            if git ls-remote --exit-code --tags "https://github.com/${FRONT_REPO}.git" "refs/tags/${TAG}" >/dev/null; then
-              REF="${TAG}"
-            else
-              REF="master"
-            fi
-          fi
-          echo "FRONT_REF=${REF}" >> $GITHUB_ENV
-          echo "Frontend ref: ${REF}"
-
-      - name: Checkout frontend
-        if: steps.tag.outputs.skip != 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.FRONT_REPO }}
-          ref: ${{ env.FRONT_REF }}
-          path: front
-
-      - name: Set up Node.js
-        if: steps.tag.outputs.skip != 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: yarn
-          cache-dependency-path: front/yarn.lock
-
-      - name: Build frontend
-        if: steps.tag.outputs.skip != 'true'
-        working-directory: front
-        run: |
-          yarn install --frozen-lockfile
-          NAV_DIST="${GITHUB_WORKSPACE}/docker/dist" yarn build
-
-      - name: Set up JDK 17
-        if: steps.tag.outputs.skip != 'true'
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: maven
-
-      - name: Build and test with Maven
-        if: steps.tag.outputs.skip != 'true'
-        run: mvn -B clean package
-
       - name: Set up QEMU
         if: steps.tag.outputs.skip != 'true'
         uses: docker/setup-qemu-action@v3
@@ -111,6 +92,25 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      # 先构建 amd64 镜像到本地做冒烟测试，通过后才推送
+      - name: Build image for smoke test
+        if: steps.tag.outputs.skip != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: navigator:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test (upgrade from current latest)
+        if: steps.tag.outputs.skip != 'true'
+        run: |
+          PREV="${{ secrets.DOCKER_USERNAME }}/navigator:latest"
+          docker pull "$PREV" || PREV=""
+          docker/smoke-test.sh navigator:ci "$PREV"
+
       - name: Build and push Docker image
         if: steps.tag.outputs.skip != 'true'
         uses: docker/build-push-action@v6
@@ -119,7 +119,6 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
-          cache-to: type=gha,mode=max
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/navigator:latest
             ${{ secrets.DOCKER_USERNAME }}/navigator:${{ env.TAG }}

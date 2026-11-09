@@ -79,8 +79,14 @@ public class AuthController {
                 .build();
     }
 
+    /**
+     * 客户端 IP：只有请求来自本机的 nginx 时才信任它设置的 X-Real-IP，
+     * 否则使用真实连接地址，防止伪造请求头绕过登录失败锁定
+     */
     private static String clientIp(HttpServletRequest request) {
+        String remote = request.getRemoteAddr();
         String ip = request.getHeader("X-Real-IP");
-        return ip == null || ip.isBlank() ? request.getRemoteAddr() : ip;
+        boolean fromLocalProxy = "127.0.0.1".equals(remote) || "0:0:0:0:0:0:0:1".equals(remote) || "::1".equals(remote);
+        return fromLocalProxy && ip != null && !ip.isBlank() ? ip.trim() : remote;
     }
 }

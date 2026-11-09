@@ -34,8 +34,9 @@ build/
 /navdb.mv.db
 /navdb.trace.db
 /temp/
-/data/db/navdb.mv.db
-/data/db/navdb.trace.db
+/data/
 
-### 前端构建产物（CI 中从 Navigator_front 构建，本地可在前端项目执行 yarn build 生成）###
+### 前端 ###
+frontend/node_modules/
+frontend/dist/
 docker/dist/

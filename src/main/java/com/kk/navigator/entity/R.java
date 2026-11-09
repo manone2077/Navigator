@@ -38,6 +38,13 @@ public class R<T> {
         return r;
     }
 
+    public static <T> R<T> of(int code, String message) {
+        R<T> r = new R<>();
+        r.setCode(code);
+        r.setMsg(message);
+        return r;
+    }
+
     public static <T> R<T> error(String message) {
         R<T> r = new R<>();
         r.setCode(ResultCode.INTERNAL_SERVER_ERROR.code);

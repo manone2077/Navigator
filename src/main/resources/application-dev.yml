@@ -1,6 +1,7 @@
-
+# 本地开发配置：./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+# 数据保存在项目目录下的 data/（已在 .gitignore 中忽略）
 image:
-  path: C:\proj\java\Navigator\temp\images\
+  path: ./data/public/images/
 
 assets:
-  path: C:\proj\java\Navigator\docker\dist\assets
+  path: ./frontend/dist/assets/
