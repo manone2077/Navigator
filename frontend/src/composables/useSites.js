@@ -2,6 +2,9 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as api from '@/service/api.js'
 import { STATUS_TIMEOUT } from '@/composables/site.js'
+import { useTags } from '@/composables/tags.js'
+
+const VIEW_KEY = 'navigator-view'
 
 /**
  * 站点列表的数据与操作：加载、筛选、删除、排序、测速、备份，以及定时静默刷新。
@@ -9,6 +12,7 @@ import { STATUS_TIMEOUT } from '@/composables/site.js'
  */
 export function useSites() {
   const sites = ref([])
+  const { tags, loadTags } = useTags()
   const loading = ref(true)
   const speedLoading = ref(false)
   const dragging = ref(false)
@@ -17,7 +21,8 @@ export function useSites() {
   async function load(silent = false) {
     if (!silent) loading.value = true
     try {
-      sites.value = await api.listSites()
+      const [list] = await Promise.all([api.listSites(), loadTags()])
+      sites.value = list
     } catch {
       /* 已在拦截器中提示 */
     } finally {
@@ -29,6 +34,14 @@ export function useSites() {
   const keyword = ref('')
   // all 全部 / ok 可访问 / bad 异常 / untested 未测速
   const statusFilter = ref('all')
+  // 按标签筛选：标签 id，null 表示全部
+  const tagFilter = ref(null)
+  // 视图：group 按标签分组（默认）/ flat 平铺
+  const view = ref(localStorage.getItem(VIEW_KEY) || 'group')
+  const setView = (v) => {
+    view.value = v
+    localStorage.setItem(VIEW_KEY, v)
+  }
   const isBad = (s) => s.status >= STATUS_TIMEOUT
   const isUntested = (s) => s.status == null || s.status < 0
   const isOk = (s) => !isBad(s) && !isUntested(s)
@@ -37,16 +50,32 @@ export function useSites() {
 
   const filtered = computed(() => {
     const k = keyword.value.trim().toLowerCase()
+    const t = tagFilter.value
     return sites.value.filter(
-      (s) => matchStatus(s) && (!k || [s.title, s.content, s.url].some((v) => (v || '').toLowerCase().includes(k))),
+      (s) =>
+        matchStatus(s) &&
+        (t == null || (s.tags || []).some((x) => x.id === t)) &&
+        (!k || [s.title, s.content, s.url, ...(s.tags || []).map((x) => x.name)].some((v) => (v || '').toLowerCase().includes(k))),
     )
   })
   // 搜索或筛选时展示过滤结果，并禁用拖拽，避免排序错乱
-  const searching = computed(() => keyword.value.trim().length > 0 || statusFilter.value !== 'all')
+  const searching = computed(
+    () => keyword.value.trim().length > 0 || statusFilter.value !== 'all' || tagFilter.value != null,
+  )
   const resetFilter = () => {
     keyword.value = ''
     statusFilter.value = 'all'
+    tagFilter.value = null
   }
+
+  // 没有标签时只能平铺显示
+  const grouped = computed(() => view.value === 'group' && tags.value.length > 0)
+  /** 分组：按标签顺序，一个站点可以出现在多个分组中；没有标签的站点放在“未分组”，空分组不显示 */
+  const groups = computed(() => {
+    const list = tags.value.map((tag) => ({ tag, sites: filtered.value.filter((s) => (s.tags || []).some((x) => x.id === tag.id)) }))
+    list.push({ tag: null, sites: filtered.value.filter((s) => !(s.tags || []).length) })
+    return list.filter((g) => g.sites.length)
+  })
 
   const stats = computed(() => {
     const ok = sites.value.filter(isOk)
@@ -84,6 +113,21 @@ export function useSites() {
     } catch {
       /* 已在拦截器中提示 */
     }
+  }
+
+  /**
+   * 分组内拖拽排序：组内站点在整体顺序中占据的位置不变，只调整它们之间的先后，
+   * 这样其它分组中的相对顺序不受影响
+   */
+  function reorderGroup(ids) {
+    const order = new Map(ids.map((id, i) => [id, i]))
+    const positions = []
+    sites.value.forEach((s, i) => order.has(s.id) && positions.push(i))
+    const moved = ids.map((id) => sites.value.find((s) => s.id === id))
+    const next = [...sites.value]
+    positions.forEach((pos, k) => (next[pos] = moved[k]))
+    sites.value = next
+    return saveSort()
   }
 
   async function saveSort() {
@@ -156,15 +200,20 @@ export function useSites() {
         ElMessage.warning('没有可导出的站点')
         return
       }
-      const payload = data.map(({ title, url, content, description, checkinUrl, icon }) => ({
+      const payload = data.map(({ title, url, content, description, checkinUrl, icon, tags: siteTags }) => ({
         title,
         url,
         content,
         description,
         checkinUrl,
         icon,
+        tags: (siteTags || []).map((t) => t.name),
       }))
-      const blob = new Blob([JSON.stringify({ version: 1, sites: payload }, null, 2)], { type: 'application/json' })
+      // version 2：增加标签定义（名称、颜色、顺序），旧版本的备份文件仍可导入
+      const tagDefs = tags.value.map(({ name, color }) => ({ name, color }))
+      const blob = new Blob([JSON.stringify({ version: 2, tags: tagDefs, sites: payload }, null, 2)], {
+        type: 'application/json',
+      })
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
       a.download = `navigator-backup-${new Date().toISOString().slice(0, 10)}.json`
@@ -178,15 +227,19 @@ export function useSites() {
 
   async function importBackup(file) {
     let list
+    let tagDefs = []
     try {
       const json = JSON.parse(await file.text())
       list = Array.isArray(json) ? json : json.sites || json.data
       if (!Array.isArray(list)) throw new Error()
+      if (Array.isArray(json.tags)) tagDefs = json.tags
     } catch {
       ElMessage.error('文件格式不正确，请选择导出的 JSON 备份文件')
       return
     }
     try {
+      // 先导入标签定义以保留颜色和顺序，站点再按名称关联标签
+      if (tagDefs.length) await api.importTags(tagDefs)
       const res = await api.importSites(list)
       ElMessage.success(res.msg)
       await load(true)
@@ -219,11 +272,18 @@ export function useSites() {
     dragging,
     keyword,
     statusFilter,
+    tagFilter,
+    tags,
+    view,
+    setView,
+    grouped,
+    groups,
     filtered,
     searching,
     stats,
     load,
     resetFilter,
+    reorderGroup,
     onSaved,
     replaceSite,
     remove,

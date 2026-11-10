@@ -9,6 +9,8 @@ const props = defineProps({
   site: { type: Object, required: true },
   draggable: { type: Boolean, default: true },
   editable: { type: Boolean, default: true },
+  // 平铺视图下在卡片上显示标签；分组视图中由分组标题体现
+  showTags: Boolean,
 })
 const emit = defineEmits(['edit', 'delete', 'updated'])
 
@@ -93,6 +95,10 @@ const description = computed(() => {
     </div>
 
     <p v-if="description" class="content">{{ description }}</p>
+
+    <div v-if="showTags && site.tags && site.tags.length" class="tags">
+      <span v-for="t in site.tags" :key="t.id" class="tag" :style="{ '--tag': t.color }"><i />{{ t.name }}</span>
+    </div>
 
     <div class="card-foot">
       <el-tooltip :content="latencyTip" placement="top" :show-after="200">
@@ -292,6 +298,33 @@ const description = computed(() => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-all;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: -4px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--el-text-color-regular);
+  background: color-mix(in srgb, var(--tag) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tag) 30%, transparent);
+}
+
+.tag i {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--tag);
 }
 
 .card-foot {

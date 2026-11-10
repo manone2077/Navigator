@@ -1,14 +1,21 @@
 <script setup>
 import { computed } from 'vue'
-import { Rank } from '@element-plus/icons-vue'
+import { Grid, Menu, Rank } from '@element-plus/icons-vue'
 
 const filter = defineModel({ type: String, default: 'all' })
+// 标签筛选：标签 id，null 表示不按标签筛选
+const tagFilter = defineModel('tag', { type: Number, default: null })
+// 视图：group 分组 / flat 平铺
+const view = defineModel('view', { type: String, default: 'group' })
 const props = defineProps({
   stats: { type: Object, required: true },
   // 正在搜索或筛选时显示结果数量，否则显示拖拽排序提示
   resultCount: { type: Number, default: null },
   showDragHint: Boolean,
+  tags: { type: Array, default: () => [] },
 })
+
+const toggleTag = (id) => (tagFilter.value = tagFilter.value === id ? null : id)
 
 const toggle = (f) => (filter.value = filter.value === f ? 'all' : f)
 const tested = computed(() => props.stats.online + props.stats.bad)
@@ -54,6 +61,28 @@ const overall = computed(() => {
       <button v-if="stats.untested" class="chip none" :class="{ active: filter === 'untested' }" @click="toggle('untested')">
         <i />未测速 <b>{{ stats.untested }}</b>
       </button>
+      <template v-if="tags.length">
+        <span class="sep" />
+        <button
+          v-for="t in tags"
+          :key="t.id"
+          class="chip tag"
+          :class="{ active: tagFilter === t.id }"
+          :style="{ '--tag': t.color }"
+          @click="toggleTag(t.id)"
+        >
+          <i />{{ t.name }}
+        </button>
+        <span class="sep" />
+        <div class="view-toggle" role="group" aria-label="显示方式">
+          <button :class="{ active: view === 'group' }" title="按标签分组" @click="view = 'group'">
+            <el-icon><Menu /></el-icon>分组
+          </button>
+          <button :class="{ active: view === 'flat' }" title="平铺显示" @click="view = 'flat'">
+            <el-icon><Grid /></el-icon>平铺
+          </button>
+        </div>
+      </template>
       <span v-if="resultCount != null" class="hint">显示 {{ resultCount }} 个</span>
       <span v-else-if="showDragHint" class="hint">拖动卡片右上角的 <el-icon><Rank /></el-icon> 调整顺序</span>
     </div>
@@ -212,6 +241,54 @@ const overall = computed(() => {
   box-shadow: 0 0 0 3px var(--nav-accent-glow);
 }
 
+.chip.tag i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--tag);
+  box-shadow: 0 0 6px var(--tag);
+}
+
+.chip.tag.active {
+  border-color: var(--tag);
+  color: var(--el-text-color-primary);
+  background: color-mix(in srgb, var(--tag) 14%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tag) 22%, transparent);
+}
+
+.sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--nav-border-strong);
+}
+
+.view-toggle {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  border: 1px solid var(--nav-border);
+}
+
+.view-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.view-toggle button.active {
+  background: var(--nav-gradient);
+  color: #fff;
+}
+
 .hint {
   display: inline-flex;
   align-items: center;
@@ -226,7 +303,8 @@ const overall = computed(() => {
     padding: 12px 14px;
   }
 
-  .hint {
+  .hint,
+  .sep {
     display: none;
   }
 }

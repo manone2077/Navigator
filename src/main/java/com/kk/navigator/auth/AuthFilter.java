@@ -18,7 +18,7 @@ public class AuthFilter extends OncePerRequestFilter {
     /** 无需登录的接口 */
     private static final Set<String> PUBLIC = Set.of("/api/health", "/api/auth/status", "/api/auth/login", "/api/auth/logout");
     /** 开启访客浏览时，未登录也可访问的只读接口 */
-    private static final Set<String> GUEST = Set.of("/api/all");
+    private static final Set<String> GUEST = Set.of("/api/all", "/api/tags");
 
     private final AuthService authService;
 
