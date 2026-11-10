@@ -4,6 +4,11 @@ import { ElMessage } from 'element-plus'
 import { Loading, MagicStick, RefreshLeft, Upload } from '@element-plus/icons-vue'
 import { addSite, fetchIcon, siteMeta, updateSite, uploadImage } from '@/service/api.js'
 import { avatarColor, faviconOf, normalizeUrl } from '@/composables/site.js'
+import { useTags } from '@/composables/tags.js'
+
+const { tags: allTags, loadTags } = useTags()
+// 按名称查找已有标签的颜色（新输入的标签还没有颜色）
+const tagColor = (name) => allTags.value.find((t) => t.name.toLowerCase() === String(name).toLowerCase())?.color
 
 const emit = defineEmits(['saved'])
 
@@ -16,7 +21,7 @@ const urlInput = ref()
 const fileInput = ref()
 const iconFailed = ref(false)
 
-const emptySite = () => ({ id: null, title: '', url: '', content: '', description: '', checkinUrl: '', icon: '' })
+const emptySite = () => ({ id: null, title: '', url: '', content: '', description: '', checkinUrl: '', icon: '', tags: [] })
 const form = reactive(emptySite())
 const isEdit = computed(() => form.id != null)
 
@@ -45,7 +50,11 @@ watch(previewIcon, () => (iconFailed.value = false))
 
 /** 打开对话框；传入站点则为编辑（使用副本，取消时不会修改列表数据） */
 function open(site) {
-  Object.assign(form, emptySite(), site ? JSON.parse(JSON.stringify(site)) : {})
+  const copy = site ? JSON.parse(JSON.stringify(site)) : {}
+  // 表单中的标签使用名称，保存时后端会创建不存在的标签
+  copy.tags = (copy.tags || []).map((t) => (typeof t === 'string' ? t : t.name))
+  Object.assign(form, emptySite(), copy)
+  loadTags()
   autoTitle = ''
   lastMetaUrl = ''
   iconFailed.value = false
@@ -137,6 +146,8 @@ async function submit() {
     ElMessage.success(res.msg)
     visible.value = false
     emit('saved', res.data, !isEdit.value)
+    // 可能新建了标签
+    loadTags()
   } catch {
     /* 已在拦截器中提示 */
   } finally {
@@ -176,6 +187,29 @@ defineExpose({ open })
       </el-form-item>
       <el-form-item label="站点名称" prop="title">
         <el-input v-model="form.title" placeholder="请输入站点名称" maxlength="50" clearable @keyup.enter="submit" />
+      </el-form-item>
+      <el-form-item label="站点标签" prop="tags">
+        <el-select
+          v-model="form.tags"
+          class="tag-select"
+          multiple
+          filterable
+          allow-create
+          default-first-option
+          :reserve-keyword="false"
+          :multiple-limit="10"
+          placeholder="选择标签，或输入名称后回车新建"
+          no-data-text="输入名称后回车即可新建标签"
+        >
+          <el-option v-for="t in allTags" :key="t.id" :label="t.name" :value="t.name">
+            <span class="tag-option"><i :style="{ background: t.color }" />{{ t.name }}</span>
+          </el-option>
+          <template #tag>
+            <el-tag v-for="name in form.tags" :key="name" closable size="small" class="tag-pill" @close="form.tags = form.tags.filter((n) => n !== name)">
+              <i :style="{ background: tagColor(name) || 'var(--nav-muted)' }" />{{ name }}
+            </el-tag>
+          </template>
+        </el-select>
       </el-form-item>
       <el-form-item label="站点描述" prop="content">
         <el-input
@@ -217,6 +251,27 @@ defineExpose({ open })
 </template>
 
 <style scoped>
+.tag-select {
+  width: 100%;
+}
+
+.tag-option,
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tag-option i,
+.tag-pill i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
 .icon-row {
   display: flex;
   gap: 14px;

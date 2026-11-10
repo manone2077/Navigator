@@ -9,6 +9,7 @@ import {
   Moon,
   Picture,
   Plus,
+  PriceTag,
   Search,
   Sunny,
   SwitchButton,
@@ -20,7 +21,7 @@ import { useTheme } from '@/composables/theme.js'
 
 const keyword = defineModel('keyword', { type: String, default: '' })
 defineProps({ speedLoading: Boolean })
-// command: icons / export / import / deleteAll / login / logout / about
+// command: tags / icons / export / import / deleteAll / login / logout / about
 const emit = defineEmits(['add', 'speedtest', 'command', 'search-enter'])
 
 const { isDark, toggleTheme } = useTheme()
@@ -74,6 +75,7 @@ defineExpose({ focusSearch: () => searchRef.value?.focus() })
           <template #dropdown>
             <el-dropdown-menu>
               <template v-if="canEdit">
+                <el-dropdown-item command="tags" :icon="PriceTag">管理标签</el-dropdown-item>
                 <el-dropdown-item command="icons" :icon="Picture">重新获取图标</el-dropdown-item>
                 <el-dropdown-item command="export" :icon="Download" divided>导出备份</el-dropdown-item>
                 <el-dropdown-item command="import" :icon="Upload">导入备份</el-dropdown-item>

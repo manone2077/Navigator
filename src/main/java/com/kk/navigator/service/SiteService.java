@@ -50,15 +50,17 @@ public class SiteService {
     private final IconStore iconStore;
     private final IconFetcher iconFetcher;
     private final SpeedtestService speedtestService;
+    private final TagService tagService;
     /** 获取图标可能对每个站点尝试多个地址，使用独立线程池，避免占用测速线程 */
     private final ExecutorService iconPool = Executors.newFixedThreadPool(4, SpeedtestService.named("icon"));
 
     public SiteService(SiteInfoDao siteInfoDao, IconStore iconStore, IconFetcher iconFetcher,
-                       SpeedtestService speedtestService) {
+                       SpeedtestService speedtestService, TagService tagService) {
         this.siteInfoDao = siteInfoDao;
         this.iconStore = iconStore;
         this.iconFetcher = iconFetcher;
         this.speedtestService = speedtestService;
+        this.tagService = tagService;
     }
 
     @PreDestroy
@@ -104,6 +106,7 @@ public class SiteService {
     public SiteInfo add(SiteForm form) {
         SiteInfo site = new SiteInfo();
         apply(site, form, false);
+        site.setTags(tagService.resolve(form.tags()));
         site.setStatus(SiteInfo.STATUS_UNTESTED);
         site.setSortOrder(nextSortOrder());
         SiteInfo saved = siteInfoDao.save(site);
@@ -116,6 +119,9 @@ public class SiteService {
         String oldIcon = site.getIcon();
         String oldUrl = site.getUrl();
         apply(site, form, false);
+        if (form.tags() != null) {
+            site.setTags(tagService.resolve(form.tags()));
+        }
         SiteInfo saved = siteInfoDao.save(site);
         if (!Objects.equals(oldIcon, saved.getIcon())) {
             deleteIconIfUnused(oldIcon);
@@ -169,6 +175,7 @@ public class SiteService {
             SiteInfo site = new SiteInfo();
             try {
                 apply(site, form, true);
+                site.setTags(tagService.resolve(form.tags()));
             } catch (BizException e) {
                 continue;
             }

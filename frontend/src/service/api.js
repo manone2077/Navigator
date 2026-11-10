@@ -20,3 +20,9 @@ export const fetchIcon = (url) => http.post('fetchIcon', { url }).then((r) => r.
 export const refreshIcons = () => http.post('refreshIcons')
 export const siteMeta = (url) => http.post('siteMeta', { url }, { silent: true }).then((r) => r.data)
 export const speedtestOne = (id) => http.post('speedtest/one', { id }).then((r) => r.data)
+
+export const listTags = () => http.get('tags').then((r) => r.data || [])
+export const saveTag = (tag) => http.post('tags/save', tag).then((r) => r.data)
+export const deleteTag = (id) => http.post('tags/delete', { id })
+export const sortTags = (ids) => http.post('tags/sort', ids)
+export const importTags = (tags) => http.post('tags/import', tags)

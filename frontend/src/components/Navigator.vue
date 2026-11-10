@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { VueDraggable } from 'vue-draggable-plus'
 import { Plus, Upload } from '@element-plus/icons-vue'
@@ -7,6 +7,8 @@ import Site from '@/components/Site.vue'
 import SiteDialog from '@/components/SiteDialog.vue'
 import TopBar from '@/components/TopBar.vue'
 import StatusFilter from '@/components/StatusFilter.vue'
+import GroupSection from '@/components/GroupSection.vue'
+import TagManager from '@/components/TagManager.vue'
 import { useSites } from '@/composables/useSites.js'
 import { auth, canEdit, logout } from '@/composables/auth.js'
 
@@ -19,11 +21,18 @@ const {
   dragging,
   keyword,
   statusFilter,
+  tagFilter,
+  tags,
+  view,
+  setView,
+  grouped,
+  groups,
   filtered,
   searching,
   stats,
   load,
   resetFilter,
+  reorderGroup,
   onSaved,
   replaceSite,
   remove,
@@ -38,6 +47,12 @@ const {
 const topBar = ref()
 const dialogRef = ref()
 const importInput = ref()
+const tagManager = ref()
+
+// 筛选中的标签被删除后，取消标签筛选
+watch(tags, (list) => {
+  if (tagFilter.value != null && !list.some((t) => t.id === tagFilter.value)) tagFilter.value = null
+})
 
 const openAdd = () => dialogRef.value.open()
 const openEdit = (site) => dialogRef.value.open(site)
@@ -59,6 +74,7 @@ async function doLogout() {
 }
 
 const commands = {
+  tags: () => tagManager.value.open(),
   icons: refreshAllIcons,
   export: exportBackup,
   import: () => importInput.value.click(),
@@ -105,9 +121,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       <StatusFilter
         v-if="sites.length"
         v-model="statusFilter"
+        v-model:tag="tagFilter"
+        :view="view"
         :stats="stats"
+        :tags="tags"
         :result-count="searching ? filtered.length : null"
         :show-drag-hint="canEdit"
+        @update:view="setView"
       />
 
       <div v-if="loading" class="grid">
@@ -125,7 +145,24 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         <el-button @click="resetFilter">显示全部站点</el-button>
       </el-empty>
 
-      <!-- 搜索、筛选或只读模式下不能拖拽排序 -->
+      <!-- 按标签分组：搜索、筛选或只读模式下不能拖拽 -->
+      <template v-else-if="grouped">
+        <GroupSection
+          v-for="g in groups"
+          :key="g.tag ? g.tag.id : 'untagged'"
+          :tag="g.tag"
+          :sites="g.sites"
+          :draggable="canEdit && !searching"
+          :editable="canEdit"
+          @drag-start="dragging = true"
+          @reorder="reorderGroup"
+          @edit="openEdit"
+          @delete="remove"
+          @updated="replaceSite"
+        />
+      </template>
+
+      <!-- 平铺：搜索、筛选或只读模式下不能拖拽排序 -->
       <div v-else-if="searching || !canEdit" class="grid">
         <Site
           v-for="site in filtered"
@@ -133,6 +170,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           :site="site"
           :draggable="false"
           :editable="canEdit"
+          show-tags
           @edit="openEdit"
           @delete="remove"
           @updated="replaceSite"
@@ -149,13 +187,22 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         @start="dragging = true"
         @end="saveSort"
       >
-        <Site v-for="site in sites" :key="site.id" :site="site" @edit="openEdit" @delete="remove" @updated="replaceSite" />
+        <Site
+          v-for="site in sites"
+          :key="site.id"
+          :site="site"
+          show-tags
+          @edit="openEdit"
+          @delete="remove"
+          @updated="replaceSite"
+        />
       </VueDraggable>
     </main>
 
     <template v-if="canEdit">
       <el-button class="fab nav-gradient-btn" type="primary" :icon="Plus" circle aria-label="添加站点" @click="openAdd" />
       <SiteDialog ref="dialogRef" @saved="onSaved" />
+      <TagManager ref="tagManager" :sites="sites" @changed="load(true)" />
     </template>
   </div>
 </template>

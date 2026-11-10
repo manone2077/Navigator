@@ -1,12 +1,19 @@
 package com.kk.navigator.entity;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @Entity
@@ -35,4 +42,12 @@ public class SiteInfo {
     private String statusMsg;
     /** 最近一次测速时间 */
     private LocalDateTime checkedAt;
+
+    /** 站点标签，按标签排序返回 */
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(name = "nav_site_tag",
+            joinColumns = @JoinColumn(name = "site_id"),
+            inverseJoinColumns = @JoinColumn(name = "tag_id"))
+    @OrderBy("sortOrder ASC, id ASC")
+    private List<Tag> tags = new ArrayList<>();
 }
