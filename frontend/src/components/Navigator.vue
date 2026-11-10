@@ -154,7 +154,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     </main>
 
     <template v-if="canEdit">
-      <el-button class="fab" type="primary" :icon="Plus" circle aria-label="添加站点" @click="openAdd" />
+      <el-button class="fab nav-gradient-btn" type="primary" :icon="Plus" circle aria-label="添加站点" @click="openAdd" />
       <SiteDialog ref="dialogRef" @saved="onSaved" />
     </template>
   </div>
@@ -179,9 +179,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 .skeleton {
   padding: 16px;
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--nav-card-bg);
   border: 1px solid var(--nav-border);
+  backdrop-filter: blur(14px);
 }
 
 :deep(.drag-ghost) {
@@ -197,7 +198,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   width: 52px;
   height: 52px;
   font-size: 22px;
-  box-shadow: 0 6px 20px rgba(64, 128, 255, 0.4);
+  box-shadow: 0 10px 30px -8px var(--nav-accent-glow);
 }
 
 @media (max-width: 760px) {

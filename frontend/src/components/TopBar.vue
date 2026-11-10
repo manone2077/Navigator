@@ -36,7 +36,7 @@ defineExpose({ focusSearch: () => searchRef.value?.focus() })
           <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
           <path d="M15.5 8.5 13.4 13.4 8.5 15.5 10.6 10.6Z" fill="currentColor" />
         </svg>
-        <span>皮特导航</span>
+        <span class="brand-text">皮特导航</span>
       </div>
 
       <el-input
@@ -56,7 +56,7 @@ defineExpose({ focusSearch: () => searchRef.value?.focus() })
 
       <div class="tools">
         <template v-if="canEdit">
-          <el-button class="add-btn" type="primary" :icon="Plus" @click="emit('add')">
+          <el-button class="add-btn nav-gradient-btn" type="primary" :icon="Plus" @click="emit('add')">
             <span class="btn-text">添加站点</span>
           </el-button>
           <el-button class="speed-btn" :icon="Lightning" :loading="speedLoading" @click="emit('speedtest')">
@@ -100,8 +100,21 @@ defineExpose({ focusSearch: () => searchRef.value?.focus() })
   top: 0;
   z-index: 10;
   background: var(--nav-topbar-bg);
-  backdrop-filter: saturate(180%) blur(12px);
+  backdrop-filter: saturate(180%) blur(16px);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
   border-bottom: 1px solid var(--nav-border);
+}
+
+/* 底部一道渐变光线 */
+.topbar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--nav-accent) 30%, var(--nav-accent-2) 70%, transparent);
+  opacity: 0.5;
 }
 
 .topbar-inner {
@@ -125,7 +138,16 @@ defineExpose({ focusSearch: () => searchRef.value?.focus() })
 .brand .logo {
   width: 26px;
   height: 26px;
-  color: var(--el-color-primary);
+  color: var(--nav-accent);
+  filter: drop-shadow(0 0 6px var(--nav-accent-glow));
+}
+
+.brand-text {
+  background: var(--nav-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  letter-spacing: 0.04em;
 }
 
 .search {
@@ -136,10 +158,12 @@ defineExpose({ focusSearch: () => searchRef.value?.focus() })
 
 .search :deep(.el-input__wrapper) {
   border-radius: 999px;
+  background: var(--nav-card-bg);
+  box-shadow: 0 0 0 1px var(--nav-border) inset;
 }
 
 .kbd {
-  font-family: inherit;
+  font-family: var(--nav-mono);
   font-size: 11px;
   line-height: 16px;
   padding: 0 6px;
