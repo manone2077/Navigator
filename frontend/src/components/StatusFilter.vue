@@ -303,55 +303,8 @@ const overall = computed(() => {
     padding: 12px 14px;
   }
 
-  .chip.tag i {
-  width: 7px;
-  height: 7px;
-  border-radius: 2px;
-  background: var(--tag);
-  box-shadow: 0 0 6px var(--tag);
-}
-
-.chip.tag.active {
-  border-color: var(--tag);
-  color: var(--el-text-color-primary);
-  background: color-mix(in srgb, var(--tag) 14%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tag) 22%, transparent);
-}
-
-.sep {
-  width: 1px;
-  height: 16px;
-  margin: 0 4px;
-  background: var(--nav-border-strong);
-}
-
-.view-toggle {
-  display: inline-flex;
-  padding: 2px;
-  border-radius: 999px;
-  border: 1px solid var(--nav-border);
-}
-
-.view-toggle button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 22px;
-  padding: 0 10px;
-  border: none;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.view-toggle button.active {
-  background: var(--nav-gradient);
-  color: #fff;
-}
-
-.hint {
+  .hint,
+  .sep {
     display: none;
   }
 }
